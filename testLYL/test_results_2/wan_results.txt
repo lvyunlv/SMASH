@@ -1,0 +1,13 @@
+=== wan Network Test Results ===
+Date: Tue 05 Aug 2025 09:59:46 PM CST
+Environment: wan
+Number of Parties: 2
+
+--- Party 1 Log ---
+Offline time: 4.4846 s, comm: 0.00118732 MB
+Online time: 0.201821 s, comm: 0 MB
+
+--- Party 2 Log ---
+Offline time: 4.28434 s, comm: 0.000896454 MB
+Online time: 0.201809 s, comm: 0 MB
+

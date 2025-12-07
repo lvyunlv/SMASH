@@ -1,0 +1,10 @@
+Table size: 256
+Number of parties: 8
+Initial memory usage: 100.18 MB
+Finish DistKeyGen
+Finish generate_shares
+Offline time: 0.591384 s, comm: 0.250074 MB
+Finish input generation
+Finish input size check
+Online batch time: 0.000764 seconds, Online communication: 0.000274 MB
+Online time: 0.000786 s, comm: 0.000274 MB

@@ -14,6 +14,9 @@
 #include <string>
 #include <sstream>
 #include <vector>
+#include <thread>
+#include <chrono>
+#include <memory>
 
 // // Required to compile on mac, remove on ubuntu
 // #ifdef __APPLE__
@@ -60,8 +63,44 @@ std::string base64_decode(const std::string &in) {
 }
 
 namespace emp {
-    // whaaaaat?
     #define MAX_MULT_DEPTH 10
+    class NetworkSimulator {
+    private:
+        int delay_ms;
+        double bandwidth_factor; 
+    public:
+        NetworkSimulator(int delay, int bandwidth_kbps)
+            : delay_ms(delay), bandwidth_factor(1.0 / (bandwidth_kbps * 1000.0)) {}
+        void simulate(size_t data_size) {
+            if (delay_ms > 0)
+                std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
+            double transfer_time = data_size * 8.0 * bandwidth_factor; 
+            if (transfer_time > 0)
+                std::this_thread::sleep_for(std::chrono::duration<double>(transfer_time));
+        }
+    };
+
+    inline std::unique_ptr<NetworkSimulator> network_simulator;
+
+    inline void initialize_network_conditions(const std::string& condition) {
+        if (condition == "local") {
+            // 10 Gbps, 0.1ms
+            network_simulator = std::make_unique<NetworkSimulator>(0.1, 10 * 1000 * 1000);
+        } else if (condition == "lan") {
+            // 1 Gbps, 0.1ms
+            network_simulator = std::make_unique<NetworkSimulator>(0.1, 1 * 1000 * 1000);
+        } else if (condition == "wan") {
+            // 200 Mbps, 100ms
+            network_simulator = std::make_unique<NetworkSimulator>(100, 200 * 1000);
+        } else {
+            // none or unknown: clear simulator
+            network_simulator.reset();
+        }
+    }
+
+    inline void simulate_network_transfer(size_t bytes) {
+        if (network_simulator) network_simulator->simulate(bytes);
+    }
 
     template <typename IO>
     class ELGL{
@@ -161,6 +200,7 @@ namespace emp {
                 int string_size = str.size();
                 char* c         = (char*)malloc(string_size);
                 s.read(c, string_size);
+                simulate_network_transfer(string_size);
                 io->send_data(i, c, string_size, j, mt);
                 io->flush(i, j);
                 free(c);
@@ -173,6 +213,7 @@ namespace emp {
 
                 char* c         = (char*)malloc(string_size);
                 s.read(c, string_size);
+                simulate_network_transfer(string_size);
                 io->send_data(i, c, string_size, j, mt);
                 io->flush(i, j);
                 free(c);
@@ -192,6 +233,7 @@ namespace emp {
                 for (int i = 1; i <= num_party; ++i) {
                     if (i != party) {
                         res.push_back(std::async([this, i, c, string_size, j, mt]() {
+                            simulate_network_transfer(string_size);
                             io->send_data(i, c, string_size, j, mt);
                             io->flush(i, j);
                         }));
@@ -216,6 +258,7 @@ namespace emp {
                         memcpy(c + sizeof(int), str.data(), string_size);
 
                         res.push_back(std::async([this, i, c, string_size, j, mt]() {
+                            simulate_network_transfer(string_size + sizeof(int));
                             io->send_data(i, c, string_size + sizeof(int), j, mt);
                             io->flush(i, j);
                             free(c);
@@ -227,6 +270,22 @@ namespace emp {
                 res.clear();
                 s.clear();
             }
+
+            void serialize_sendp2p(std::stringstream& s, int target_party, int j = 0, MESSAGE_TYPE mt = NORM_MSG) {
+                string str = s.str();
+                int string_size = str.size();
+
+                char* c = (char*)malloc(string_size + sizeof(int));
+                memcpy(c, &party, sizeof(int));
+                memcpy(c + sizeof(int), str.data(), string_size);
+                simulate_network_transfer(string_size + sizeof(int));
+                io->send_data(target_party, c, string_size + sizeof(int), j, mt);
+                io->flush(target_party, j);
+                free(c);
+
+                s.clear();
+            }
+
 
         void wait_for(int src){
             bool c = false;
@@ -245,6 +304,7 @@ namespace emp {
                 std::stringstream s;
                 int string_size = 0;
                 char* c         = (char*)io->recv_data(i, string_size, j, mt);
+                if (c != nullptr && string_size > 0) simulate_network_transfer((size_t)string_size);
                 s.write(c, string_size);
                 free(c);
                 obj.unpack(s);
@@ -258,6 +318,7 @@ namespace emp {
                     std::cerr << "[Error] Invalid data received from party " << i << std::endl;
                     return;
                 }
+                simulate_network_transfer((size_t)string_size);
 
                 int sender_id = 0;
                 memcpy(&sender_id, c, sizeof(int));
@@ -274,6 +335,7 @@ namespace emp {
                 char* c = (char*)malloc(sizeof(int) + string_size);
                 memcpy(c, &tag, sizeof(int));
                 memcpy(c + sizeof(int), str.data(), string_size);
+                simulate_network_transfer(sizeof(int) + string_size);
                 io->send_data(i, c, sizeof(int) + string_size, 0, mt);
                 io->flush(i, 0);
                 free(c);
@@ -313,6 +375,7 @@ namespace emp {
                         memcpy(c, &tag, sizeof(int));
                         memcpy(c + sizeof(int), str.data(), string_size);
                         res.push_back(std::async([this, i, c, string_size, j, mt]() {
+                            simulate_network_transfer(sizeof(int) + string_size);
                             io->send_data(i, c, sizeof(int) + string_size, j, mt);
                             io->flush(i, j);
                             free(c);

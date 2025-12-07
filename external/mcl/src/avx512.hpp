@@ -150,7 +150,7 @@ inline Vec vpgatherqq(const Vec& idx, const void *base)
 
 inline Vec vmovdqu64(const void *base)
 {
-	return _mm512_loadu_epi64(base);
+	return _mm512_load_epi64(base);
 }
 
 inline Vec vmovdqu64(const Vmask& v, const void *base)

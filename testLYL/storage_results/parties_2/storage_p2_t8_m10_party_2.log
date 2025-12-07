@@ -1,0 +1,68 @@
+=== LVT Storage Analysis Tool ===
+Party: 2, Total Parties: 2
+Table Size: 2^8, M Bits: 10
+Initial memory usage: 8.04688 MB
+
+Creating LVT object...
+
+Analyzing storage overhead...
+
+=== Storage Analysis for Party 2 ===
+Configuration: 2 parties, table_size=2^8, m_bits=10
+LUT Shares:                 0.01 MB
+Encrypted LUT:              0.00 MB
+Rotation Ciphertexts:       0.00 MB
+User Public Keys:           0.00 MB
+Global Public Key:          0.00 MB
+Rotation Value:             0.00 MB
+Original Table:             0.00 MB
+P_to_m Mapping:            16.00 MB
+BSGS Precomputation:        0.00 MB
+----------------------------------------
+Total Storage:             16.01 MB
+Peak Memory Usage:        100.15 MB
+
+Executing DistKeyGen...
+
+=== Storage Analysis After KeyGen ===
+
+=== Storage Analysis for Party 2 ===
+Configuration: 2 parties, table_size=2^8, m_bits=10
+LUT Shares:                 0.01 MB
+Encrypted LUT:              0.00 MB
+Rotation Ciphertexts:       0.00 MB
+User Public Keys:           0.00 MB
+Global Public Key:          0.00 MB
+Rotation Value:             0.00 MB
+Original Table:             0.00 MB
+P_to_m Mapping:            16.00 MB
+BSGS Precomputation:        0.00 MB
+----------------------------------------
+Total Storage:             16.01 MB
+Peak Memory Usage:        100.16 MB
+
+Executing generate_shares...
+
+=== Final Storage Analysis ===
+
+=== Storage Analysis for Party 2 ===
+Configuration: 2 parties, table_size=2^8, m_bits=10
+LUT Shares:                 0.01 MB
+Encrypted LUT:              0.07 MB
+Rotation Ciphertexts:       0.00 MB
+User Public Keys:           0.00 MB
+Global Public Key:          0.00 MB
+Rotation Value:             0.00 MB
+Original Table:             0.00 MB
+P_to_m Mapping:            16.00 MB
+BSGS Precomputation:        0.00 MB
+----------------------------------------
+Total Storage:             16.08 MB
+Peak Memory Usage:        104.06 MB
+
+=== Memory Growth Analysis ===
+Initial memory:  8.05 MB
+Final memory:    104.06 MB
+Memory growth:   96.01 MB
+
+Storage analysis completed for Party 2

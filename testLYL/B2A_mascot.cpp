@@ -80,7 +80,7 @@ int main(int argc, char** argv) {
         total_time += online_time;
         total_comm += online_comm;
     }
-    std::cout << "Average time: " << (total_time/times) << "ms && Average communication: " << (total_comm/times) << "KB" << std::endl;
+    // std::cout << "Average time: " << (total_time/times) << "ms && Average communication: " << (total_comm/times) << "KB" << std::endl;
 
     delete elgl;
     delete io;

@@ -1,0 +1,45 @@
+=== LVT Storage Analysis Tool ===
+Party: 2, Total Parties: 2
+Table Size: 2^8, M Bits: 16
+Initial memory usage: 7.88672 MB
+
+Creating LVT object...
+
+Analyzing storage overhead...
+
+=== Storage Analysis for Party 2 ===
+Configuration: 2 parties, table_size=2^8, m_bits=16
+LUT Shares:                 0.01 MB
+Encrypted LUT:              0.00 MB
+Rotation Ciphertexts:       0.00 MB
+User Public Keys:           0.00 MB
+Global Public Key:          0.00 MB
+Rotation Value:             0.00 MB
+Original Table:             0.00 MB
+P_to_m Mapping:             0.00 MB
+BSGS Precomputation:        0.00 MB
+----------------------------------------
+Total Storage:              0.01 MB
+Peak Memory Usage:          8.47 MB
+
+Executing DistKeyGen...
+
+=== Storage Analysis After KeyGen ===
+
+=== Storage Analysis for Party 2 ===
+Configuration: 2 parties, table_size=2^8, m_bits=16
+LUT Shares:                 0.01 MB
+Encrypted LUT:              0.00 MB
+Rotation Ciphertexts:       0.00 MB
+User Public Keys:           0.00 MB
+Global Public Key:          0.00 MB
+Rotation Value:             0.00 MB
+Original Table:             0.00 MB
+P_to_m Mapping:             0.00 MB
+BSGS Precomputation:        0.00 MB
+----------------------------------------
+Total Storage:              0.01 MB
+Peak Memory Usage:          8.48 MB
+
+Executing generate_shares...
+net_recv_data

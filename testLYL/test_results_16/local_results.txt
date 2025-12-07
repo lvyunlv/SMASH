@@ -1,0 +1,69 @@
+=== local Network Test Results ===
+Date: Tue 05 Aug 2025 07:45:36 PM CST
+Environment: local
+Number of Parties: 16
+
+--- Party 1 Log ---
+Offline time: 35.4962 s, comm: 0.0178194 MB
+Online time: 0.0185321 s, comm: 4.76837e-06 MB
+
+--- Party 2 Log ---
+Offline time: 35.1047 s, comm: 0.013443 MB
+Online time: 0.0173567 s, comm: 4.76837e-06 MB
+
+--- Party 3 Log ---
+Offline time: 35.1223 s, comm: 0.013443 MB
+Online time: 0.0176832 s, comm: 4.76837e-06 MB
+
+--- Party 4 Log ---
+Offline time: 35.4486 s, comm: 0.013443 MB
+Online time: 0.0133701 s, comm: 4.76837e-06 MB
+
+--- Party 5 Log ---
+Offline time: 35.3915 s, comm: 0.013443 MB
+Online time: 0.0184231 s, comm: 4.76837e-06 MB
+
+--- Party 6 Log ---
+Offline time: 35.4737 s, comm: 0.013443 MB
+Online time: 0.0159071 s, comm: 4.76837e-06 MB
+
+--- Party 7 Log ---
+Offline time: 35.3153 s, comm: 0.013443 MB
+Online time: 0.0150812 s, comm: 4.76837e-06 MB
+
+--- Party 8 Log ---
+Offline time: 35.4707 s, comm: 0.013443 MB
+Online time: 0.020033 s, comm: 4.76837e-06 MB
+
+--- Party 9 Log ---
+Offline time: 35.0983 s, comm: 0.013443 MB
+Online time: 0.0150028 s, comm: 4.76837e-06 MB
+
+--- Party 10 Log ---
+Offline time: 35.353 s, comm: 0.013443 MB
+Online time: 0.0163704 s, comm: 4.76837e-06 MB
+
+--- Party 11 Log ---
+Offline time: 35.3895 s, comm: 0.013443 MB
+Online time: 0.0156352 s, comm: 4.76837e-06 MB
+
+--- Party 12 Log ---
+Offline time: 35.1203 s, comm: 0.013443 MB
+Online time: 0.0160609 s, comm: 4.76837e-06 MB
+
+--- Party 13 Log ---
+Offline time: 35.1008 s, comm: 0.013443 MB
+Online time: 0.0176695 s, comm: 4.76837e-06 MB
+
+--- Party 14 Log ---
+Offline time: 35.3854 s, comm: 0.013443 MB
+Online time: 0.0186965 s, comm: 4.76837e-06 MB
+
+--- Party 15 Log ---
+Offline time: 35.017 s, comm: 0.013443 MB
+Online time: 0.0189356 s, comm: 4.76837e-06 MB
+
+--- Party 16 Log ---
+Offline time: 35.4924 s, comm: 0.013443 MB
+Online time: 0.0181717 s, comm: 4.76837e-06 MB
+

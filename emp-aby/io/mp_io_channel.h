@@ -18,7 +18,7 @@ public:
     virtual void flush(int idx = 0, int j = 0)                                                              = 0;
     virtual T*& get(size_t idx, bool b = false)                                                             = 0;
     virtual ~MPIOChannel()                                                                                  = 0;
-    virtual int get_total_bytes_sent()                                                                      = 0;
+    virtual uint64_t get_total_bytes_sent()                                                                      = 0;
 };
 
 template <typename IO>

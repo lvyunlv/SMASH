@@ -1,0 +1,6 @@
+========== Testing with 2 parties ==========
+ Launching Party 1: ../bin/test_lvt_semi 1 999 2
+----- Results for N=2 (Party 1) -----
+Offline time: 0.340217 s, comm: 0.0625172 MB
+Online time: 0.071865 s, comm: 3.000009 MB
+

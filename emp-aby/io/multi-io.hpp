@@ -26,7 +26,7 @@ public:
     void recv_data(int src, void* data, int len, int j = 0, MESSAGE_TYPE msg_type = NORM_MSG);
     void* recv_data(int src, int& len, int j = 0, MESSAGE_TYPE msg_type = NORM_MSG);
 
-    int get_total_bytes_sent();
+    uint64_t get_total_bytes_sent();
 
     void flush(int idx = 0, int j = 0) {}
     void sync() {}
@@ -221,18 +221,18 @@ void* MultiIO::recv_data(int src, int& len, int j, MESSAGE_TYPE msg_type) {
     return data;
 }
 
-int MultiIO::get_total_bytes_sent() {
-    double kb = 0;
+uint64_t MultiIO::get_total_bytes_sent() {
+    uint64_t total = 0;
     for (auto& io : this->ios) {
-        kb += (double)(io.second->counter) / 1000;
+        total += io.second->counter;
     }
     for (auto& io : this->ot_ios[0]) {
-        kb += (double)(io.second->counter) / 1000;
+        total += io.second->counter;
     }
     for (auto& io : this->ot_ios[1]) {
-        kb += (double)(io.second->counter) / 1000;
+        total += io.second->counter;
     }
-    return kb;
+    return total;
 }
 
 void MultiIO::background_recv() {

@@ -1,0 +1,13 @@
+=== lan Network Test Results ===
+Date: Tue 05 Aug 2025 09:59:37 PM CST
+Environment: lan
+Number of Parties: 2
+
+--- Party 1 Log ---
+Offline time: 2.60418 s, comm: 0.00118732 MB
+Online time: 0.00202829 s, comm: 0 MB
+
+--- Party 2 Log ---
+Offline time: 2.60394 s, comm: 0.000896454 MB
+Online time: 0.00202578 s, comm: 0 MB
+

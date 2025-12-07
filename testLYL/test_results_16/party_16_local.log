@@ -1,0 +1,6 @@
+Finish DistKeyGen
+Finish generate_shares
+Offline time: 35.4924 s, comm: 0.013443 MB
+Finish input generation
+Finish input size check
+Online time: 0.0181717 s, comm: 4.76837e-06 MB

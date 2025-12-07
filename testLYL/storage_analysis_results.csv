@@ -1,0 +1,2 @@
+total_memory,peak_memory,lut_share_size,cip_lut_size,cr_i_size,user_pk_size,global_pk_size,rotation_size,table_size,p_to_m_size,bsgs_size
+16788496,105099264,8192,0,576,288,144,32,2048,16777216,0

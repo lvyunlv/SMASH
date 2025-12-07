@@ -50,18 +50,18 @@ unset(_cmake_expected_targets)
 add_library(mcl::mcl SHARED IMPORTED)
 
 set_target_properties(mcl::mcl PROPERTIES
-  INTERFACE_COMPILE_DEFINITIONS "MCL_NO_AUTOLINK;MCLBN_NO_AUTOLINK;MCL_BINT_ASM_X64=0;MCL_USE_LLVM=1"
-  INTERFACE_INCLUDE_DIRECTORIES "/Users/lvbao/Desktop/SMASH/external/mcl/include"
-  INTERFACE_LINK_LIBRARIES "/Users/lvbao/Desktop/SMASH/external/mcl/bint64.o;/Users/lvbao/Desktop/SMASH/external/mcl/base64.o"
+  INTERFACE_COMPILE_DEFINITIONS "MCL_NO_AUTOLINK;MCLBN_NO_AUTOLINK;MCL_USE_LLVM=1"
+  INTERFACE_INCLUDE_DIRECTORIES "/workspace/lyl/SMASH/external/mcl/include"
+  INTERFACE_LINK_LIBRARIES "/workspace/lyl/SMASH/external/mcl/msm_avx.o"
 )
 
 # Create imported target mcl::mcl_st
 add_library(mcl::mcl_st STATIC IMPORTED)
 
 set_target_properties(mcl::mcl_st PROPERTIES
-  INTERFACE_COMPILE_DEFINITIONS "MCL_NO_AUTOLINK;MCLBN_NO_AUTOLINK;MCL_BINT_ASM_X64=0;MCL_USE_LLVM=1"
-  INTERFACE_INCLUDE_DIRECTORIES "/Users/lvbao/Desktop/SMASH/external/mcl/include"
-  INTERFACE_LINK_LIBRARIES "/Users/lvbao/Desktop/SMASH/external/mcl/bint64.o;/Users/lvbao/Desktop/SMASH/external/mcl/base64.o"
+  INTERFACE_COMPILE_DEFINITIONS "MCL_NO_AUTOLINK;MCLBN_NO_AUTOLINK;MCL_USE_LLVM=1"
+  INTERFACE_INCLUDE_DIRECTORIES "/workspace/lyl/SMASH/external/mcl/include"
+  INTERFACE_LINK_LIBRARIES "/workspace/lyl/SMASH/external/mcl/msm_avx.o"
 )
 
 # Create imported target mcl::mclbn256
@@ -91,36 +91,36 @@ set_target_properties(mcl::mclbn384_256 PROPERTIES
 # Import target "mcl::mcl" for configuration "Release"
 set_property(TARGET mcl::mcl APPEND PROPERTY IMPORTED_CONFIGURATIONS RELEASE)
 set_target_properties(mcl::mcl PROPERTIES
-  IMPORTED_LOCATION_RELEASE "/Users/lvbao/Desktop/SMASH/lib/libmcl.1.74.dylib"
-  IMPORTED_SONAME_RELEASE "@rpath/libmcl.1.dylib"
+  IMPORTED_LOCATION_RELEASE "/workspace/lyl/SMASH/lib/libmcl.so.1.74"
+  IMPORTED_SONAME_RELEASE "libmcl.so.1"
   )
 
 # Import target "mcl::mcl_st" for configuration "Release"
 set_property(TARGET mcl::mcl_st APPEND PROPERTY IMPORTED_CONFIGURATIONS RELEASE)
 set_target_properties(mcl::mcl_st PROPERTIES
-  IMPORTED_LINK_INTERFACE_LANGUAGES_RELEASE "CXX"
-  IMPORTED_LOCATION_RELEASE "/Users/lvbao/Desktop/SMASH/lib/libmcl.a"
+  IMPORTED_LINK_INTERFACE_LANGUAGES_RELEASE "ASM;CXX"
+  IMPORTED_LOCATION_RELEASE "/workspace/lyl/SMASH/lib/libmcl.a"
   )
 
 # Import target "mcl::mclbn256" for configuration "Release"
 set_property(TARGET mcl::mclbn256 APPEND PROPERTY IMPORTED_CONFIGURATIONS RELEASE)
 set_target_properties(mcl::mclbn256 PROPERTIES
-  IMPORTED_LOCATION_RELEASE "/Users/lvbao/Desktop/SMASH/lib/libmclbn256.1.74.dylib"
-  IMPORTED_SONAME_RELEASE "@rpath/libmclbn256.1.dylib"
+  IMPORTED_LOCATION_RELEASE "/workspace/lyl/SMASH/lib/libmclbn256.so.1.74"
+  IMPORTED_SONAME_RELEASE "libmclbn256.so.1"
   )
 
 # Import target "mcl::mclbn384" for configuration "Release"
 set_property(TARGET mcl::mclbn384 APPEND PROPERTY IMPORTED_CONFIGURATIONS RELEASE)
 set_target_properties(mcl::mclbn384 PROPERTIES
-  IMPORTED_LOCATION_RELEASE "/Users/lvbao/Desktop/SMASH/lib/libmclbn384.1.74.dylib"
-  IMPORTED_SONAME_RELEASE "@rpath/libmclbn384.1.dylib"
+  IMPORTED_LOCATION_RELEASE "/workspace/lyl/SMASH/lib/libmclbn384.so.1.74"
+  IMPORTED_SONAME_RELEASE "libmclbn384.so.1"
   )
 
 # Import target "mcl::mclbn384_256" for configuration "Release"
 set_property(TARGET mcl::mclbn384_256 APPEND PROPERTY IMPORTED_CONFIGURATIONS RELEASE)
 set_target_properties(mcl::mclbn384_256 PROPERTIES
-  IMPORTED_LOCATION_RELEASE "/Users/lvbao/Desktop/SMASH/lib/libmclbn384_256.1.74.dylib"
-  IMPORTED_SONAME_RELEASE "@rpath/libmclbn384_256.1.dylib"
+  IMPORTED_LOCATION_RELEASE "/workspace/lyl/SMASH/lib/libmclbn384_256.so.1.74"
+  IMPORTED_SONAME_RELEASE "libmclbn384_256.so.1"
   )
 
 # This file does not depend on other imported targets which have

@@ -80,13 +80,13 @@ int main(int argc, char** argv) {
     double total_comm = 0;
     double online_time = 0;
     double online_comm = 0;
-    int times = 5;
+    int times = 1;
     for (int i = 0; i < times; ++i) {
         auto shared_x = L2A_spdz2k::L2A(elgl, lvt, spdz2k, party, num_party, io, &pool, x, vec_cx, FIELD_SIZE, online_time, online_comm);
         total_time += online_time;
         total_comm += online_comm;
     }
-    std::cout << "Average time: " << (total_time/times) << "ms && Average communication: " << (total_comm/times) << "KB" << std::endl;
+    // std::cout << "Average time: " << (total_time/times) << "ms && Average communication: " << (total_comm/times) << "KB" << std::endl;
     delete elgl;
     delete io;
     delete lvt;

@@ -32,6 +32,8 @@ inline MASCOT<MultiIOBase>::LabeledShare L2A(
     double& online_time,
     double& online_comm
 ) {
+    int bytes = io->get_total_bytes_sent();
+    auto t = std::chrono::high_resolution_clock::now();
     MASCOT<MultiIOBase>::LabeledShare shared_x;
     Fr fd_fr; 
     fd_fr.setStr(fd.getStr());
@@ -71,6 +73,14 @@ inline MASCOT<MultiIOBase>::LabeledShare L2A(
         }
     }
 
+    auto tt = std::chrono::high_resolution_clock::now();
+    int bytes_ = io->get_total_bytes_sent();
+    double comm_kb1 = double(bytes_ - bytes) / 1024.0;
+    double time_ms1 = std::chrono::duration<double, std::milli>(tt - t).count();
+    std::cout << std::fixed << std::setprecision(6)
+              << "Offline Communication: " << comm_kb1 << " KB, "
+              << "Offline Time: " << time_ms1 << " ms" << std::endl;
+    
     int bytes_start = io->get_total_bytes_sent();
     auto t1 = std::chrono::high_resolution_clock::now();
 
@@ -80,9 +90,9 @@ inline MASCOT<MultiIOBase>::LabeledShare L2A(
             count += vec_cx[i - 1];
         }
     }
-    BLS12381Element u = threshold_decrypt_<MultiIOBase>(count, elgl, lvt->global_pk, lvt->user_pk, io, pool, party, num_party, lvt->P_to_m, lvt);
-    // BLS12381Element u = threshold_decrypt_<MultiIOBase>(count, elgl, lvt->global_pk, lvt->user_pk, io, pool, party, num_party, lvt->P_to_m, lvt);
-    // Fr u = threshold_decrypt(count, elgl, lvt->global_pk, lvt->user_pk, io, pool, party, num_party, lvt->P_to_m, lvt);
+    BLS12381Element u = thdcp_<MultiIOBase>(count, elgl, lvt->global_pk, lvt->user_pk, io, pool, party, num_party, lvt->P_to_m, lvt);
+    // BLS12381Element u = thdcp_<MultiIOBase>(count, elgl, lvt->global_pk, lvt->user_pk, io, pool, party, num_party, lvt->P_to_m, lvt);
+    // Fr u = thdcp(count, elgl, lvt->global_pk, lvt->user_pk, io, pool, party, num_party, lvt->P_to_m, lvt);
     mcl::Vint u_int;
     // u_int.setStr(u.getStr());
     MASCOT<MultiIOBase>::LabeledShare shared_u;
@@ -101,9 +111,9 @@ inline MASCOT<MultiIOBase>::LabeledShare L2A(
             int bytes_end = io->get_total_bytes_sent();
             double comm_kb = double(bytes_end - bytes_start) / 1024.0;
             double time_ms = std::chrono::duration<double, std::milli>(t2 - t1).count();
-            // std::cout << std::fixed << std::setprecision(6)
-            //           << "Communication: " << comm_kb << " KB, "
-            //           << "Time: " << time_ms << " ms" << std::endl;
+            std::cout << std::fixed << std::setprecision(6)
+                      << "Online Communication: " << comm_kb << " KB, "
+                      << "Online Time: " << time_ms << " ms" << std::endl;
 
             online_time = time_ms;
             online_comm = comm_kb;
@@ -184,9 +194,9 @@ inline MASCOT<MultiIOBase>::LabeledShare L2A_for_B2A(
             count += vec_cx[i - 1];
         }
     }
-    BLS12381Element u = threshold_decrypt_<MultiIOBase>(count, elgl, lvt->global_pk, lvt->user_pk, io, pool, party, num_party, lvt->P_to_m, lvt);
-    // BLS12381Element u = threshold_decrypt_<MultiIOBase>(count, elgl, lvt->global_pk, lvt->user_pk, io, pool, party, num_party, lvt->P_to_m, lvt);
-    // Fr u = threshold_decrypt(count, elgl, lvt->global_pk, lvt->user_pk, io, pool, party, num_party, lvt->P_to_m, lvt);
+    BLS12381Element u = thdcp_<MultiIOBase>(count, elgl, lvt->global_pk, lvt->user_pk, io, pool, party, num_party, lvt->P_to_m, lvt);
+    // BLS12381Element u = thdcp_<MultiIOBase>(count, elgl, lvt->global_pk, lvt->user_pk, io, pool, party, num_party, lvt->P_to_m, lvt);
+    // Fr u = thdcp(count, elgl, lvt->global_pk, lvt->user_pk, io, pool, party, num_party, lvt->P_to_m, lvt);
     mcl::Vint u_int;
     // u_int.setStr(u.getStr());
     MASCOT<MultiIOBase>::LabeledShare shared_u;

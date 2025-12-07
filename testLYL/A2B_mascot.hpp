@@ -30,6 +30,9 @@ inline vector<TinyMAC<MultiIOBase>::LabeledShare> A2B(
     double& online_time,
     double& online_comm
 ) {
+    int bytes = io->get_total_bytes_sent();
+    auto t = std::chrono::high_resolution_clock::now();
+
     vector<TinyMAC<MultiIOBase>::LabeledShare> x_bool(l);
     vector<TinyMAC<MultiIOBase>::LabeledShare> r_bits(l);
     std::random_device rd;
@@ -38,6 +41,15 @@ inline vector<TinyMAC<MultiIOBase>::LabeledShare> A2B(
     for (int i = 0; i < l; ++i) r_bits[i] = tiny.distributed_share(bit_dis(gen));
     MASCOT<MultiIOBase>::LabeledShare r_arith;
     r_arith = B2A_mascot::B2A_for_A2B(elgl, lvt, tiny, mascot, party, num_party, io, pool, FIELD_SIZE, r_bits);
+    
+    auto tt = std::chrono::high_resolution_clock::now();
+    int bytes_ = io->get_total_bytes_sent();
+    double comm_kb1 = double(bytes_ - bytes) / 1024.0;
+    double time_ms1 = std::chrono::duration<double, std::milli>(tt - t).count();
+    std::cout << std::fixed << std::setprecision(6)
+              << "Offline Communication: " << comm_kb1 << " KB, "
+              << "Offline Time: " << time_ms1 << " ms" << std::endl;
+    
     int bytes_start = io->get_total_bytes_sent();
     auto t1 = std::chrono::high_resolution_clock::now();
     MASCOT<MultiIOBase>::LabeledShare x_plus_r;
@@ -58,9 +70,9 @@ inline vector<TinyMAC<MultiIOBase>::LabeledShare> A2B(
     int bytes_end = io->get_total_bytes_sent();
     double comm_kb = double(bytes_end - bytes_start) / 1024.0;
     double time_ms = std::chrono::duration<double, std::milli>(t2 - t1).count();
-    std::cout << std::fixed << std::setprecision(3)
-              << "Communication: " << comm_kb << " KB, "
-              << "Time: " << time_ms << " ms" << std::endl;
+    std::cout << std::fixed << std::setprecision(6)
+              << "Online Communication: " << comm_kb << " KB, "
+              << "Online Time: " << time_ms << " ms" << std::endl;
     online_time = time_ms;
     online_comm = comm_kb;
     return x_bool;
