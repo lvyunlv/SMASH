@@ -7,7 +7,7 @@
 using namespace emp;
 
 int party, port;
-const static int threads = 32;
+const static int threads = 8;
 int num_party;
 size_t get_current_memory_usage() {
     struct rusage r_usage;
@@ -110,7 +110,7 @@ int main(int argc, char** argv) {
     ThreadPool pool(threads);
     MultiIO* io = new MultiIO(party, num_party, net_config);
     ELGL<MultiIOBase>* elgl = new ELGL<MultiIOBase>(num_party, io, &pool, party);
-    int te = 8; int ad = 1 << te; int da = ad; 
+    int te = 10; int ad = 1 << te; int da = ad; 
     Fr alpha_fr = alpha_init(te);
     std::string tablefile = "init";
     emp::LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party, party, io, &pool, elgl, tablefile, alpha_fr, te, te);
@@ -124,7 +124,7 @@ int main(int argc, char** argv) {
     uint64_t bytes_start = io->get_total_bytes_sent();
     auto t1 = std::chrono::high_resolution_clock::now();
 
-    lvt->generate_shares(lvt->lut_share, lvt->rotation, lvt->table);
+    lvt->generate_shares_(lvt->lut_share, lvt->rotation, lvt->table);
     mpz_class fd = ad;
     // cout << "Finish generate_shares" << endl;
 
@@ -132,7 +132,7 @@ int main(int argc, char** argv) {
     auto t2 = std::chrono::high_resolution_clock::now();
     double comm_kb = double(bytes_end - bytes_start) / 1024.0 / 1024.0;
     float time_ms = std::chrono::duration<float, std::milli>(t2 - t1).count() / 1000.0;
-    // cout << "Offline time: " << time_ms << " s, comm: " << comm_kb << " MB" << std::endl;
+    cout << "Offline time: " << time_ms << " s, comm: " << comm_kb << " MB" << std::endl;
 
     //     // 计算Offline阶段存储开销
     // StorageMetrics storage_metrics;
@@ -165,11 +165,6 @@ int main(int argc, char** argv) {
             Plaintext x;
             x.assign(line);
             x_share.push_back(x);
-            if (x.get_message().getUint64() > (1ULL << te) - 1) {
-                std::cerr << "Error: input value exceeds table size in Party: " << party << std::endl;
-                std::cerr << "Error value: " << x.get_message().getUint64() << ", da = " << (1ULL << te) << std::endl;
-                return 1;
-            }
         }
         in_file.close();
     }

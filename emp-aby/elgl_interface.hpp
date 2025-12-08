@@ -144,35 +144,31 @@ namespace emp {
 
             ~ELGL(){
             }
-
-            // proof: (g, h, g^x, h^x)
             void DecProof(ELGL_PK global_pk, std::stringstream& commitment, std::stringstream& response, std::stringstream& encMap, vector<int64_t> table, unsigned table_size,vector<BLS12381Element>& EncTable_c0, vector<BLS12381Element>& EncTable_c1, ThreadPool * pool){
                 ExpProof proof(global_pk, table_size);
                 vector<BLS12381Element> y3;
                 table.resize(table_size);
                 vector<Plaintext> x(table_size);
-                // convert int 64 to Plaintext
-                for(size_t i = 0; i < table_size; i++){
-                    
-                    x[i] = Plaintext(Fr(table[i]));
-                }
                 EncTable_c0.resize(table_size);
                 EncTable_c1.resize(table_size);
                 y3.resize(table_size);
                 vector<Plaintext> r1;
                 r1.resize(table_size);
+                std::vector<std::future<void>> tasks;
                 for(size_t i = 0; i < table_size; i++){
-                    r1[i].set_random();
-                    //y1 = g^r, y2 = gpk^r
-                    EncTable_c0[i] = BLS12381Element(r1[i].get_message());
-                    y3[i] = global_pk.get_pk() * r1[i].get_message();
-                    EncTable_c1[i] =  y3[i] + BLS12381Element(x[i].get_message());
+                    tasks.push_back(pool->enqueue([&, i]() {
+                        r1[i].set_random();
+                        x[i] = Plaintext(Fr(table[i]));
+                        EncTable_c0[i] = BLS12381Element(r1[i].get_message());
+                        y3[i] = global_pk.get_pk() * r1[i].get_message();
+                        EncTable_c1[i] =  y3[i] + BLS12381Element(x[i].get_message());
+                    }));
+                }
+                for (auto& task : tasks) task.get();
+                tasks.clear();
+                for(size_t i = 0; i < table_size; i++){
                     EncTable_c1[i].pack(encMap);
                 }
-                
-                // std::cout << "finish g1,y1,y2 gen" << std::endl;
-                // std::cout << "prove start" << std::endl;
-
                 ExpProver prover(proof);
                 BLS12381Element pk_ = global_pk.get_pk();
                 prover.NIZKPoK(proof, commitment, response, pk_, EncTable_c0, y3, r1, pool);
