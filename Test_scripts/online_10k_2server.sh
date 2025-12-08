@@ -1,17 +1,18 @@
 #!/bin/bash
 # 文件路径: /workspace/lyl/SMASH/run_lvt_experiment.sh
 
-BASE_DIR="/workspace/lyl/SMASH"
+BASE_DIR="$HOME/SMASH"
 BIN_DIR="$BASE_DIR/bin"
 RESULTS_DIR="$BASE_DIR/Results"
-OUTPUT_FILE="$RESULTS_DIR/online_10k.txt"
+OUTPUT_FILE="$RESULTS_DIR/online_10k_2server.txt"
+IP_FILE="$BASE_DIR/config/parties8.txt"
 
 # 创建结果目录
 mkdir -p "$RESULTS_DIR"
 echo "n condition avg_time(s) avg_comm(MB)" > "$OUTPUT_FILE"
 
 # 定义参与方数和网络条件
-NS=(2 4 8 16 32)
+NS=(8)
 NETS=("local" "lan" "wan")
 
 # 遍历每种n和网络条件
@@ -25,10 +26,10 @@ for n in "${NS[@]}"; do
         # 启动n个进程，使用端口从2222开始递增
         PIDS=()
         TMP_FILES=()
-        for ((i=1;i<=n;i++)); do
+        for ((i=1;i<=n/2;i++)); do
             TMP_FILE=$(mktemp)
             TMP_FILES+=("$TMP_FILE")
-            "$BIN_DIR/test_lvt" "$i" $((2222)) "$n" "$net" > "$TMP_FILE" 2>&1 &
+            "$BIN_DIR/test_lvt" "$i" $((2222)) "$n" "$net" "$IP_FILE" > "$TMP_FILE" 2>&1 &
             PIDS+=($!)
         done
 
