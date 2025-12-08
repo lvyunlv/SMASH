@@ -114,23 +114,9 @@ int main(int argc, char** argv) {
     emp::LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party, party, io, &pool, elgl, tablefile, alpha_fr, te, te);
     cout << "Number of parties: " << num_party << endl;
     size_t initial_memory = get_current_memory_usage();
-    // std::cout << "Initial memory usage: " << initial_memory / 1024.0 / 1024.0 << " MB" << std::endl;
-    
     lvt->DistKeyGen();
-    // cout << "Finish DistKeyGen" << endl;
-
-    uint64_t bytes_start = io->get_total_bytes_sent();
-    auto t1 = std::chrono::high_resolution_clock::now();
-
-    lvt->generate_shares(lvt->lut_share, lvt->rotation, lvt->table);
+    lvt->generate_shares_(lvt->lut_share, lvt->rotation, lvt->table);
     mpz_class fd = ad;
-    // cout << "Finish generate_shares" << endl;
-
-    uint64_t bytes_end = io->get_total_bytes_sent();
-    auto t2 = std::chrono::high_resolution_clock::now();
-    double comm_kb = double(bytes_end - bytes_start) / 1024.0 / 1024.0;
-    float time_ms = std::chrono::duration<float, std::milli>(t2 - t1).count() / 1000.0;
-    cout << "Offline time: " << time_ms << " s, comm: " << comm_kb << " MB" << std::endl;
 
     //     // 计算Offline阶段存储开销
     // StorageMetrics storage_metrics;

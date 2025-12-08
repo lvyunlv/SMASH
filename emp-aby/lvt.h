@@ -120,6 +120,7 @@ class LVT{
     ~LVT();
     void generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation, vector<int64_t> table);
     void generate_shares_(vector<Plaintext>& lut_share, Plaintext& rotation, vector<int64_t> table);
+    void generate_shares_fake(vector<Plaintext>& lut_share, Plaintext& rotation, vector<int64_t> table);
     tuple<Plaintext, vector<Ciphertext>> lookup_online(Plaintext& x_share, vector<Ciphertext>& x_cipher);
     tuple<vector<Plaintext>, vector<vector<Ciphertext>>> lookup_online_batch(vector<Plaintext>& x_share, vector<vector<Ciphertext>>& x_cipher); 
     void save_full_state(const std::string& filename);
@@ -958,6 +959,115 @@ void LVT<IO>::generate_shares_(vector<Plaintext>& lut_share, Plaintext& rotation
     // }
 }
 
+
+template <typename IO>
+void LVT<IO>::generate_shares_fake(vector<Plaintext>& lut_share, Plaintext& rotation, vector<int64_t> table) {
+    lut_share.resize(su);
+    cip_lut.resize(num_party, vector<BLS12381Element>(su));
+    rotation.set_message(0);
+    cr_i[party-1] = global_pk.encrypt(rotation);
+    vector<future<void>> res;
+    BLS12381Element tmp = global_pk.get_pk() * elgl->kp.get_sk().get_sk();
+    size_t block_size = (su + thread_num - 1) / thread_num;
+
+    // 填充 lut_share（按大块并行）
+    if (party == 1){
+        for (int t = 0; t < thread_num; ++t) {
+            size_t start = t * block_size;
+            size_t end = std::min(su, start + block_size);
+            res.push_back(pool->enqueue([this, &lut_share, &table, start, end]() {
+                for (size_t i = start; i < end; ++i) {
+                    lut_share[i].set_message(table[i]);
+                }
+            }));
+        }
+        for (auto& f : res) f.get();
+        res.clear();
+    } else{
+        for (int t = 0; t < thread_num; ++t) {
+            size_t start = t * block_size;
+            size_t end = std::min(su, start + block_size);
+            res.push_back(pool->enqueue([this, &lut_share, start, end]() {
+                for (size_t i = start; i < end; ++i) {
+                    lut_share[i].set_message(0);
+                }
+            }));
+        }
+        for (auto& f : res) f.get();
+        res.clear();
+    }
+
+    BLS12381Element pk_tmp = this->global_pk.get_pk() * this->elgl->kp.get_sk().get_sk();
+    elgl->serialize_sendall(pk_tmp);
+
+    if (party == 1){
+        vector<BLS12381Element> pk_others(num_party);
+        for (int p = 2; p <= num_party; ++p){
+            elgl->deserialize_recv(pk_others[p-1], p);
+        }
+
+        // 预先构造 cip_lut[0] 的序列（保持你原来的逻辑）
+        BLS12381Element G0 = BLS12381Element::generator();
+        cip_lut[0][0] = pk_tmp;
+        for (size_t i = 1; i < table.size(); ++i) {
+            cip_lut[0][i] = G0 + cip_lut[0][i-1];
+        }
+
+        // 按大块并行写入 cip_lut 的其余行和 lut_share 已经被设置
+        for (int t = 0; t < thread_num; ++t) {
+            size_t start = t * block_size;
+            size_t end = std::min(su, start + block_size);
+            res.push_back(pool->enqueue([this, &lut_share, &table, &pk_others, start, end]() {
+                for (size_t i = start; i < end; ++i) {
+                    // lut_share 已经在上面设置为 table[i]，这里保持一遍（和原来一致）
+                    lut_share[i].set_message(table[i]);
+                    for (int p = 1; p < this->num_party; ++p){
+                        this->cip_lut[p][i] = pk_others[p];
+                    }
+                }
+            }));
+        }
+        for (auto& f : res) f.get();
+        res.clear();
+
+    } else{
+        vector<BLS12381Element> pk_others(num_party);
+        for (int p = 1; p <= num_party; ++p){
+            if(p != party) elgl->deserialize_recv(pk_others[p-1], p);
+        }
+
+        // 生成等差的 G0 向量（保持你原来的思路）
+        vector<BLS12381Element> G0(table.size(), BLS12381Element::generator());
+        BLS12381Element G1 = G0[0];
+        cip_lut[0][0] = pk_tmp;
+        for (size_t i = 1; i < table.size(); ++i) {
+            G0[i] = G0[i-1] + G1;
+        }
+
+        // 按大块并行写入 cip_lut[0], lut_share, 以及其他行
+        for (int t = 0; t < thread_num; ++t) {
+            size_t start = t * block_size;
+            size_t end = std::min(su, start + block_size);
+            res.push_back(pool->enqueue([this, &G0, &lut_share, &pk_others, &pk_tmp, start, end]() {
+                for (size_t i = start; i < end; ++i) {
+                    this->cip_lut[0][i] = G0[i] + pk_others[0];
+                    lut_share[i].set_message(0);
+                    for (int p = 1; p < this->num_party; ++p){
+                        if(p != this->party) this->cip_lut[p][i] = pk_others[p];
+                        else this->cip_lut[p][i] = pk_tmp;
+                    }
+                }
+            }));
+        }
+        for (auto& f : res) f.get();
+        res.clear();
+    }
+
+    // cout << "party: " << party << endl;
+    // for (int i = 0; i < table.size(); ++i) {
+    //     cout << lut_share[i].get_message().getStr() << " " << endl;
+    // }
+}
 
 template <typename IO>
 ELGL_PK LVT<IO>::DistKeyGen(){
