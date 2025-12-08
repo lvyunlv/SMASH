@@ -86,7 +86,7 @@ int main(int argc, char** argv) {
             for (int i = 0; i < num_party; ++i) {
                 char* c = (char*)malloc(15 * sizeof(char));
                 uint p;
-                fscanf(f, "%s %d\da", c, &p);
+                fscanf(f, "%s %u", c, &p);
                 net_config.push_back(std::make_pair(std::string(c), p));
                 fflush(f);
             }
@@ -96,6 +96,10 @@ int main(int argc, char** argv) {
             for (int i = 0; i < num_party; ++i) {
                 net_config.push_back({ "127.0.0.1", (unsigned short)(port + 4 * num_party * i) });
             }
+        }
+        std::cout << "Try open config file: " << file << std::endl;
+        if (f == nullptr) {
+            std::cout << "FAILED TO OPEN CONFIG FILE" << std::endl;
         }
     } else {
         for (int i = 0; i < num_party; ++i) {
