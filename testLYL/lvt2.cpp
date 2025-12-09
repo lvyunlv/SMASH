@@ -46,7 +46,7 @@ int main(int argc, char** argv) {
     Fr alpha_fr = alpha_init(num);
     std::string tablefile = "../bin/table_2.txt";
     emp::LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party, party, io, &pool, elgl, tablefile, alpha_fr, num, m_bits);
-    lvt->DistKeyGen();
+    lvt->DistKeyGen(1);
     lvt->generate_shares(lvt->lut_share, lvt->rotation, lvt->table);
 
     std::vector<Plaintext> x_share;

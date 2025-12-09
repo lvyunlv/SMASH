@@ -67,26 +67,23 @@ int main(int argc, char** argv) {
 
     ThreadPool pool(threads);
     MultiIO* io = new MultiIO(party, num_party, net_config);
-    ELGL<MultiIOBase>* elgl = new ELGL<MultiIOBase>(num_party, io, &pool, party);
-    int m_bits = 8; int m_size = 1 << m_bits; 
-    int num = 8; int tb_size = 1ULL << num; 
-    Fr alpha_fr = alpha_init(num);
+    ELGL<MultiIOBase>* elgl = new ELGL<MultiIOBase>(num_party, io, &pool, party); 
+    int aln = 8; int tb_size = 1ULL << aln; 
+    Fr alpha_fr = alpha_init(aln);
     std::string tablefile = "init";
-    emp::LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party, party, io, &pool, elgl, tablefile, alpha_fr, num, m_bits);
+    emp::LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party, party, io, &pool, elgl, tablefile, alpha_fr, aln, aln);
     cout << "Table size: " << tb_size << endl;
     cout << "Number of parties: " << num_party << endl;
-    // 记录初始内存使用
     size_t initial_memory = get_current_memory_usage();
     std::cout << "Initial memory usage: " << initial_memory / 1024.0 / 1024.0 << " MB" << std::endl;
     
-    lvt->DistKeyGen();
+    lvt->DistKeyGen(1);
     cout << "Finish DistKeyGen" << endl;
 
     int bytes_start = io->get_total_bytes_sent();
     auto t1 = std::chrono::high_resolution_clock::now();
 
     lvt->generate_shares(lvt->lut_share, lvt->rotation, lvt->table);
-    mpz_class fd = m_size;
     cout << "Finish generate_shares" << endl;
 
     int bytes_end = io->get_total_bytes_sent();
@@ -96,7 +93,6 @@ int main(int argc, char** argv) {
     cout << "Offline time: " << time_ms << " s, comm: " << comm_kb << " MB" << std::endl;
 
     std::vector<Plaintext> x_share;
-    // std::string input_file = "../Input/Input-P" + std::to_string(party) + ".txt";
     std::string input_file = "../Input/Input-P.txt";
     {
         if (!fs::exists(input_file)) {
@@ -109,9 +105,9 @@ int main(int argc, char** argv) {
             Plaintext x;
             x.assign(line);
             x_share.push_back(x);
-            if (x.get_message().getUint64() > (1ULL << num) - 1) {
+            if (x.get_message().getUint64() > (1ULL << aln) - 1) {
                 std::cerr << "Error: input value exceeds table size in Party: " << party << std::endl;
-                cout << "Error value: " << x.get_message().getUint64() << ", tb_size = " << (1ULL << m_bits) << endl;
+                cout << "Error value: " << x.get_message().getUint64() << ", tb_size = " << (1ULL << aln) << endl;
                 return 1;
             }
         }
@@ -131,22 +127,14 @@ int main(int argc, char** argv) {
         }
     }
     Plaintext tb_field = Plaintext(tb_size);
-    Plaintext value_field = Plaintext(m_size);
-    // cout << "Finish input size check" << endl;
-
-    // Batch broadcast all x_share values to reduce round trips
     vector<Plaintext> x_sums(x_size);
     for (int i = 0; i < x_size; ++i) x_sums[i] = x_share[i];
-
-    // pack all x_sums into a stream and broadcast to all other parties
     std::stringstream send_xss;
     for (int i = 0; i < x_size; ++i) {
         x_sums[i].pack(send_xss);
     }
     std::cout << "[P" << party << "] broadcasting " << x_size << " x_sums" << std::endl;
     elgl->serialize_sendall_(send_xss);
-
-    // receive packed batches from all other parties and accumulate
     for (int p = 1; p <= num_party; ++p) {
         if (p == party) continue;
         std::stringstream recv_ss;
@@ -159,8 +147,6 @@ int main(int argc, char** argv) {
         }
         std::cout << "[P" << party << "] received x_sums from party " << p << std::endl;
     }
-
-    // compute table points for all indices and broadcast them once
     std::stringstream send_tabless;
     vector<Plaintext> table_pts(x_size);
     for (int i = 0; i < x_size; ++i) {

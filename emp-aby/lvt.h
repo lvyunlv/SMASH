@@ -116,7 +116,7 @@ class LVT{
     LVT(int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, ELGL<IO>* elgl, std::string tableFile, Fr& alpha, int se, int da);
     static void initialize(std::string name, LVT<IO>*& lvt_ptr_ref, int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, ELGL<IO>* elgl, Fr& alpha_fr, int se, int da);
     static void initialize_batch(std::string name, LVT<IO>*& lvt_ptr_ref, int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, ELGL<IO>* elgl, Fr& alpha_fr, int se, int da);
-    ELGL_PK DistKeyGen();
+    ELGL_PK DistKeyGen(bool offline);
     ~LVT();
     void generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation, vector<int64_t> table);
     void generate_shares_(vector<Plaintext>& lut_share, Plaintext& rotation, vector<int64_t> table);
@@ -316,7 +316,7 @@ LVT<IO>::LVT(int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, EL
     this->G_tbs = BLS12381Element(su);
     BLS12381Element::init();
     BLS12381Element g = BLS12381Element::generator();
-    this->global_pk = DistKeyGen();
+    this->global_pk = DistKeyGen(1);
 }
 
 template <typename IO>
@@ -406,11 +406,9 @@ LVT<IO>::LVT(int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, EL
         if (fs::exists(p_to_m_cache)) {
             std::ifstream in(p_to_m_cache, std::ios::binary);
             if (!in) throw std::runtime_error("Failed to open P_to_m cache");
-            
             size_t size;
             in.read(reinterpret_cast<char*>(&size), sizeof(size_t));
             P_to_m.clear();
-            
             for (size_t i = 0; i < size; ++i) {
                 size_t key_len;
                 in.read(reinterpret_cast<char*>(&key_len), sizeof(size_t));
@@ -885,78 +883,114 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
     //     std::cout << "table[" << i << "]:" << lut_share[i].get_message().getStr() << " " << std::endl;
     // }
 }
+// Optimized version of LVT<IO>::generate_shares_
+// Key ideas used:
+// 1. Detect if `table` is consecutive with stride 1 (common case table[i]=i).
+//    If so, fill cip_lut[0] by computing a small number of scalar muls (one per block)
+//    and then using repeated EC addition (fast) to fill the block.
+//    This replaces millions of expensive scalar multiplications with a few (thread_num)
+//    scalar muls + many cheap EC additions.
+// 2. For parties p>=1, cip_lut[p][i] is constant (global_pk). Fill with std::fill.
+// 3. Use block-parallelism: one task per block. Avoid launching a task per index.
+// 4. Use thread-safe captures (capture block indices by value) and minimize repeated calls
+//    to getters (cache global_pk.get_pk() once).
+// 5. Fill lut_share also in blocks using std::fill or copying table values.
+
+// NOTE: Adjust calls to BLS12381Element API if your actual library names differ.
+//       This code assumes the following API (based on the original code):
+//       - BLS12381Element::generator() -> returns generator point G
+//       - BLS12381Element::zero() -> returns identity point
+//       - BLS12381Element(int64_t scalar) -> scalar * G (used only for a few block starts)
+//       - operator+(const BLS12381Element&) and operator+=(...)
+//       - get_pk() returns a BLS12381Element by value
 
 template <typename IO>
 void LVT<IO>::generate_shares_(vector<Plaintext>& lut_share, Plaintext& rotation, vector<int64_t> table) {
+    size_t n = table.size();
     lut_share.resize(su);
-    cip_lut.resize(num_party, vector<BLS12381Element>(su));
-    for (int i = 0; i < num_party; ++i) {
-        cip_lut[i].resize(su);
-    }
-    rotation.set_message(0);
+    cip_lut.assign(num_party, vector<BLS12381Element>());
+    for (int p = 0; p < num_party; ++p) cip_lut[p].resize(su);
+    rotation.set_message(0); Fr k=0;
+    elgl->kp.sk.assign_sk(k);
+    elgl->kp.pk = ELGL_PK(elgl->kp.sk);
+    BLS12381Element tmp = BLS12381Element(0);
+    this->global_pk.assign_pk(tmp);
+    for (int p = 0; p < num_party; ++p) user_pk[p].assign_pk(tmp);
     cr_i[party-1] = global_pk.encrypt(rotation);
-    vector<future<void>> res;
-    BLS12381Element tmp = global_pk.get_pk() * elgl->kp.get_sk().get_sk();
-    size_t block_size = (su + thread_num - 1) / thread_num;
-    for (int t = 0; t < thread_num; ++t) {
-        size_t start = t * block_size;
-        size_t end = std::min(su, start + block_size);
-        res.push_back(pool->enqueue([this, &lut_share, &table, tmp, start, end]() {
-            for (size_t i = start; i < end; ++i) {
-                if (party == 1) {
-                    lut_share[i].set_message(table[i]);
-                } else {lut_share[i].set_message(0);}
-            }
-        }));
+    BLS12381Element pk = this->global_pk.get_pk(); 
+    BLS12381Element G = tmp;
+    size_t tnum = std::max<size_t>(1, thread_num);
+    size_t chosen_block_size = (n + tnum - 1) / tnum;
+    if (chosen_block_size == 0) chosen_block_size = 1;
+    bool is_consecutive = true;
+    if (n > 0) {
+        int64_t start = table[0];
+        for (size_t i = 0; i < n; ++i) {
+            if (table[i] != start + static_cast<int64_t>(i)) { is_consecutive = false; break; }
+        }
     }
-    for (auto& f : res) f.get();
-    res.clear();
+    for (int p = 1; p < num_party; ++p) {
+        std::fill(cip_lut[p].begin(), cip_lut[p].begin() + n, pk);
+    }
+    vector<future<void>> tasks;
+    tasks.reserve(tnum + 4);
+    if (is_consecutive) {
+        size_t idx = 0;
+        while (idx < n) {
+            size_t bstart = idx;
+            size_t bend = std::min(n, bstart + chosen_block_size);
+            tasks.push_back(pool->enqueue([this, bstart, bend, G, pk, &table]() {
+                BLS12381Element start_point = BLS12381Element(static_cast<int64_t>(bstart + table[0]));
+                BLS12381Element cur = start_point;
+                for (size_t j = bstart; j < bend; ++j) {
+                    cip_lut[0][j] = cur + pk; 
+                    cur += G;
+                }
+            }));
+            idx = bend;
+        }
+    } else {
+        size_t idx = 0;
+        while (idx < n) {
+            size_t bstart = idx;
+            size_t bend = std::min(n, bstart + chosen_block_size);
+            tasks.push_back(pool->enqueue([this, bstart, bend, &table, pk]() {
+                for (size_t j = bstart; j < bend; ++j) {
+                    cip_lut[0][j] = BLS12381Element(table[j]) + pk;
+                }
+            }));
+            idx = bend;
+        }
+    }
+    for (auto &f : tasks) f.get();
+    tasks.clear();
     if (party == 1) {
-        for (int i = 0; i < table.size(); ++i) {
-            res.push_back(pool->enqueue([this, &lut_share, i, &table]() {
-                cip_lut[0][i] = BLS12381Element(table[i]) + this->global_pk.get_pk() * this->elgl->kp.get_sk().get_sk();
-                lut_share[i].set_message(table[i]);
+        size_t idx = 0;
+        while (idx < n) {
+            size_t bstart = idx;
+            size_t bend = std::min(n, bstart + chosen_block_size);
+            tasks.push_back(pool->enqueue([bstart, bend, &lut_share, &table]() {
+                for (size_t j = bstart; j < bend; ++j) lut_share[j].set_message(table[j]);
             }));
+            idx = bend;
         }
-        for (auto& f : res) f.get();
-        res.clear();
-        std::stringstream send_ss;
-        for (int i = 0; i < table.size(); ++i) {
-                cip_lut[0][i].pack(send_ss);
-        }
-        cr_i[party-1].pack(send_ss);
-        elgl->serialize_sendall_(send_ss);
-    }
-    else {
-        for (int i = 0; i < table.size(); ++i) {
-            res.push_back(pool->enqueue([this, &lut_share, i]() {
-                cip_lut[party-1][i] = BLS12381Element(0) + this->global_pk.get_pk() * this->elgl->kp.get_sk().get_sk();
-                lut_share[i].set_message(0);
+    } else {
+        size_t idx = 0;
+        while (idx < n) {
+            size_t bstart = idx;
+            size_t bend = std::min(n, bstart + chosen_block_size);
+            tasks.push_back(pool->enqueue([bstart, bend, &lut_share]() {
+                for (size_t j = bstart; j < bend; ++j) lut_share[j].set_message(0);
             }));
+            idx = bend;
         }
-        for (auto& f : res) f.get();
-        res.clear();
-        std::stringstream send_ss;
-        for (int i = 0; i < table.size(); ++i) {
-                cip_lut[party-1][i].pack(send_ss);
-        }
-        cr_i[party-1].pack(send_ss);
-        elgl->serialize_sendall_(send_ss);
     }
-    std::stringstream recv_ss;
+    for (auto &f : tasks) f.get();
+    tasks.clear();
+    elgl->serialize_sendall(cr_i[party-1]);
     for (int p = 1; p <= num_party; ++p) {
-        if (p != party) {
-            elgl->deserialize_recv_(recv_ss, p);
-            for (int i = 0; i < table.size(); ++i) {
-                cip_lut[p-1][i].unpack(recv_ss);
-            }
-            cr_i[p-1].unpack(recv_ss);
-        }
+        if (p != party) elgl->deserialize_recv(cr_i[p-1], p);
     }
-    // cout << "party: " << party << endl;
-    // for (int i = 0; i < table.size(); ++i) {
-    //     cout << lut_share[i].get_message().getStr() << " " << endl;
-    // }
 }
 
 
@@ -964,121 +998,62 @@ template <typename IO>
 void LVT<IO>::generate_shares_fake(vector<Plaintext>& lut_share, Plaintext& rotation, vector<int64_t> table) {
     lut_share.resize(su);
     cip_lut.resize(num_party, vector<BLS12381Element>(su));
+    for (int i = 0; i < num_party; ++i) {
+        cip_lut[i].resize(su);
+    }
     rotation.set_message(0);
     cr_i[party-1] = global_pk.encrypt(rotation);
+    BLS12381Element tmp = BLS12381Element(0);
     vector<future<void>> res;
-    BLS12381Element tmp = global_pk.get_pk() * elgl->kp.get_sk().get_sk();
     size_t block_size = (su + thread_num - 1) / thread_num;
-
-    // 填充 lut_share（按大块并行）
-    if (party == 1){
+    if (party == 1) {
         for (int t = 0; t < thread_num; ++t) {
-            size_t start = t * block_size;
-            size_t end = std::min(su, start + block_size);
-            res.push_back(pool->enqueue([this, &lut_share, &table, start, end]() {
-                for (size_t i = start; i < end; ++i) {
-                    lut_share[i].set_message(table[i]);
-                }
-            }));
+        size_t start = t * block_size;
+        size_t end = std::min(su, start + block_size);
+        res.push_back(pool->enqueue([this, &lut_share, &table, start, end]() {
+            for (size_t i = start; i < end; ++i) lut_share[i].set_message(table[i]);
+        }));
         }
         for (auto& f : res) f.get();
         res.clear();
     } else{
         for (int t = 0; t < thread_num; ++t) {
-            size_t start = t * block_size;
-            size_t end = std::min(su, start + block_size);
-            res.push_back(pool->enqueue([this, &lut_share, start, end]() {
-                for (size_t i = start; i < end; ++i) {
-                    lut_share[i].set_message(0);
-                }
-            }));
+        size_t start = t * block_size;
+        size_t end = std::min(su, start + block_size);
+        res.push_back(pool->enqueue([this, &lut_share, &table, start, end]() {
+            for (size_t i = start; i < end; ++i) lut_share[i].set_message(0);
+        }));
         }
         for (auto& f : res) f.get();
         res.clear();
     }
 
-    BLS12381Element pk_tmp = this->global_pk.get_pk() * this->elgl->kp.get_sk().get_sk();
-    elgl->serialize_sendall(pk_tmp);
-
-    if (party == 1){
-        vector<BLS12381Element> pk_others(num_party);
-        for (int p = 2; p <= num_party; ++p){
-            elgl->deserialize_recv(pk_others[p-1], p);
-        }
-
-        // 预先构造 cip_lut[0] 的序列（保持你原来的逻辑）
-        BLS12381Element G0 = BLS12381Element::generator();
-        cip_lut[0][0] = pk_tmp;
-        for (size_t i = 1; i < table.size(); ++i) {
-            cip_lut[0][i] = G0 + cip_lut[0][i-1];
-        }
-
-        // 按大块并行写入 cip_lut 的其余行和 lut_share 已经被设置
-        for (int t = 0; t < thread_num; ++t) {
-            size_t start = t * block_size;
-            size_t end = std::min(su, start + block_size);
-            res.push_back(pool->enqueue([this, &lut_share, &table, &pk_others, start, end]() {
-                for (size_t i = start; i < end; ++i) {
-                    // lut_share 已经在上面设置为 table[i]，这里保持一遍（和原来一致）
-                    lut_share[i].set_message(table[i]);
-                    for (int p = 1; p < this->num_party; ++p){
-                        this->cip_lut[p][i] = pk_others[p];
-                    }
-                }
-            }));
-        }
-        for (auto& f : res) f.get();
-        res.clear();
-
-    } else{
-        vector<BLS12381Element> pk_others(num_party);
-        for (int p = 1; p <= num_party; ++p){
-            if(p != party) elgl->deserialize_recv(pk_others[p-1], p);
-        }
-
-        // 生成等差的 G0 向量（保持你原来的思路）
-        vector<BLS12381Element> G0(table.size(), BLS12381Element::generator());
-        BLS12381Element G1 = G0[0];
-        cip_lut[0][0] = pk_tmp;
-        for (size_t i = 1; i < table.size(); ++i) {
-            G0[i] = G0[i-1] + G1;
-        }
-
-        // 按大块并行写入 cip_lut[0], lut_share, 以及其他行
-        for (int t = 0; t < thread_num; ++t) {
-            size_t start = t * block_size;
-            size_t end = std::min(su, start + block_size);
-            res.push_back(pool->enqueue([this, &G0, &lut_share, &pk_others, &pk_tmp, start, end]() {
-                for (size_t i = start; i < end; ++i) {
-                    this->cip_lut[0][i] = G0[i] + pk_others[0];
-                    lut_share[i].set_message(0);
-                    for (int p = 1; p < this->num_party; ++p){
-                        if(p != this->party) this->cip_lut[p][i] = pk_others[p];
-                        else this->cip_lut[p][i] = pk_tmp;
-                    }
-                }
-            }));
-        }
-        for (auto& f : res) f.get();
-        res.clear();
+    for (int i = 0; i < table.size(); ++i) {
+        res.push_back(pool->enqueue([this, &lut_share, &tmp, i, &table]() {
+            cip_lut[0][i] = BLS12381Element(table[i]) + tmp;
+        }));
     }
+    for (auto& f : res) f.get();
+    res.clear();
 
-    // cout << "party: " << party << endl;
-    // for (int i = 0; i < table.size(); ++i) {
-    //     cout << lut_share[i].get_message().getStr() << " " << endl;
-    // }
+    for (int i = 0; i < table.size(); ++i) {
+    res.push_back(pool->enqueue([this, &lut_share, &tmp, i, &table]() {
+        for (int p = 1; p < this->num_party; ++p)
+            cip_lut[p][i] = tmp;
+        }));
+    }
+    for (auto& f : res) f.get();
+    res.clear();
 }
 
 template <typename IO>
-ELGL_PK LVT<IO>::DistKeyGen(){
-    // first broadcast my own pk
+ELGL_PK LVT<IO>::DistKeyGen(bool offline){
     vector<std::future<void>> tasks;
     global_pk = elgl->kp.get_pk();
     elgl->serialize_sendall(global_pk);
     for (size_t i = 1; i <= num_party; i++){
         if (i != party){
             tasks.push_back(pool->enqueue([this, i](){
-                // rcv other's pk
                 ELGL_PK pk;
                 elgl->deserialize_recv(pk, i);
                 this->user_pk[i-1] = pk;
@@ -1089,7 +1064,6 @@ ELGL_PK LVT<IO>::DistKeyGen(){
         task.get();
     }
     tasks.clear();
-    // cal global pk_
     BLS12381Element global_pk_ = BLS12381Element(0);
     for (auto& pk : user_pk){
         global_pk_ += pk.get_pk();

@@ -51,7 +51,7 @@ int main(int argc, char** argv) {
     Fr alpha_fr = alpha.get_message();
     LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party, party, io, &pool, elgl, "init", alpha_fr, num, m_bits);
 
-    lvt->DistKeyGen();
+    lvt->DistKeyGen(1);
 
     MASCOT<MultiIOBase> mascot(elgl);
     

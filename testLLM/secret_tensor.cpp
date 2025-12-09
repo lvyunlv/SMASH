@@ -29,7 +29,7 @@ int main(int argc, char** argv) {
 
     Fr alpha_fr = alpha_init(fixedpoint_bits);
     LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party, party, io, &pool, elgl, "init", alpha_fr, fixedpoint_bits, fixedpoint_bits);
-    lvt->DistKeyGen();
+    lvt->DistKeyGen(1);
     SPDZ2k<MultiIOBase> spdz2k(elgl);
 
     std::vector<size_t> shape = {2, 2};

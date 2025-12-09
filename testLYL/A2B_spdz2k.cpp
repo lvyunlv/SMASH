@@ -57,7 +57,7 @@ int main(int argc, char** argv) {
     Fr alpha_fr = alpha_init(num);
     std::string tablefile = "2";
     emp::LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party, party, io, &pool, elgl, tablefile, alpha_fr, num, m_bits);
-    lvt->DistKeyGen();
+    lvt->DistKeyGen(1);
     lvt->generate_shares(lvt->lut_share, lvt->rotation, lvt->table);
     TinyMAC<MultiIOBase> tiny(elgl);
     SPDZ2k<MultiIOBase> spdz2k(elgl);

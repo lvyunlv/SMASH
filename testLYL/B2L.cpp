@@ -45,7 +45,7 @@ int main(int argc, char** argv) {
 
     Fr alpha_fr = alpha_init(num);
     LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party, party, io, &pool, elgl, "../bin/table_2.txt", alpha_fr, num, m_bits);
-    lvt->DistKeyGen();
+    lvt->DistKeyGen(1);
     lvt->generate_shares(lvt->lut_share, lvt->rotation, lvt->table);
 
     TinyMAC<MultiIOBase> tiny(elgl);

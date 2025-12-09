@@ -157,7 +157,7 @@ int main(int argc, char** argv) {
     
     // 执行密钥生成
     std::cout << "\nExecuting DistKeyGen..." << std::endl;
-    lvt->DistKeyGen();
+    lvt->DistKeyGen(1);
     
     // 执行share生成
     std::cout << "\nExecuting generate_shares..." << std::endl;

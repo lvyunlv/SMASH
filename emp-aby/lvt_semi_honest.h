@@ -84,7 +84,7 @@ class LVT{
     LVT(int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, ELGL<IO>* elgl, std::string tableFile, Fr& alpha, int table_size, int m_bits);
     static void initialize(std::string name, LVT<IO>*& lvt_ptr_ref, int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, ELGL<IO>* elgl, Fr& alpha_fr, int table_size, int m_bits);
     static void initialize_batch(std::string name, LVT<IO>*& lvt_ptr_ref, int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, ELGL<IO>* elgl, Fr& alpha_fr, int table_size, int m_bits);
-    ELGL_PK DistKeyGen();
+    ELGL_PK DistKeyGen(bool offline);
     ~LVT();
     void generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation, vector<int64_t> table);
     Plaintext lookup_online(Plaintext& x_share);
@@ -284,7 +284,7 @@ LVT<IO>::LVT(int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, EL
     this->G_tbs = BLS12381Element(tb_size);
     BLS12381Element::init();
     BLS12381Element g = BLS12381Element::generator();
-    this->global_pk = DistKeyGen();
+    this->global_pk = DistKeyGen(1);
 }
 
 template <typename IO>
@@ -916,7 +916,7 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
 }
 
 template <typename IO>
-ELGL_PK LVT<IO>::DistKeyGen(){
+ELGL_PK LVT<IO>::DistKeyGen(bool offline) {
     // first broadcast my own pk
     vector<std::future<void>> tasks;
     global_pk = elgl->kp.get_pk();

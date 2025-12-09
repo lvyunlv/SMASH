@@ -44,7 +44,7 @@ int main(int argc, char** argv) {
     alpha.assign(alpha_vint.getStr());
     Fr alpha_fr = alpha.get_message();
     LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party, party, io, &pool, elgl, "init", alpha_fr, num, m_bits);
-    lvt->DistKeyGen();
+    lvt->DistKeyGen(1);
     std::cout << "party: " << party << std::endl;
 
     SPDZ2k<MultiIOBase> spdz2k(elgl);

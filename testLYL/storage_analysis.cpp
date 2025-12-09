@@ -187,7 +187,7 @@ int main(int argc, char** argv) {
     
     // 执行密钥生成以观察内存变化
     std::cout << "\nExecuting DistKeyGen..." << std::endl;
-    lvt->DistKeyGen();
+    lvt->DistKeyGen(1);
     
     // 再次分析存储开销
     StorageMetrics metrics_after_keygen = analyze_lvt_storage(lvt, party, num_party, table_size_bits, m_bits);
