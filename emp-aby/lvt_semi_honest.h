@@ -64,8 +64,8 @@ class LVT{
     MPIOChannel<IO>* io;
     // std::vector<Ciphertext> cr_i;
     Fr alpha;
-    size_t tb_size;
-    size_t m_size;
+    size_t su;
+    size_t ad;
     // void shuffle(Ciphertext& c, bool* rotation, size_t batch_size, size_t i);
 
     ELGL_PK global_pk;
@@ -87,6 +87,7 @@ class LVT{
     ELGL_PK DistKeyGen(bool offline);
     ~LVT();
     void generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation, vector<int64_t> table);
+    void generate_shares_(vector<Plaintext>& lut_share, Plaintext& rotation, vector<int64_t> table);
     Plaintext lookup_online(Plaintext& x_share);
     vector<Plaintext> lookup_online_batch(vector<Plaintext>& x_share);
     void save_full_state(const std::string& filename);
@@ -95,7 +96,7 @@ class LVT{
     Plaintext Reconstruct_interact(Plaintext input, Ciphertext input_cip, ELGL<IO>* elgl, const ELGL_PK& global_pk, const std::vector<ELGL_PK>& user_pks, MPIOChannel<IO>* io, ThreadPool* pool, int party, int num_party, mcl::Vint modulo);
     Plaintext Reconstruct_easy(Plaintext input, ELGL<IO>* elgl, MPIOChannel<IO>* io, ThreadPool* pool, int party, int num_party, mcl::Vint modulo);
 
-    LVT(): num_party(0), party(0), io(nullptr), pool(nullptr), elgl(nullptr), alpha(Fr()), tb_size(0), m_size(0) {};
+    LVT(): num_party(0), party(0), io(nullptr), pool(nullptr), elgl(nullptr), alpha(Fr()), su(0), ad(0) {};
 };
 
 template <typename IO>
@@ -106,11 +107,11 @@ void LVT<IO>::save_full_state(const std::string& filename) {
     size_t total_size = sizeof(int) * 2 +  
                        sizeof(size_t) * 2 + 
                        sizeof(Fr) +         
-                       tb_size * sizeof(Fr) + 
+                       su * sizeof(Fr) + 
                        sizeof(Fr) +        
                        sizeof(size_t) +   
                        table.size() * sizeof(int64_t) + 
-                       num_party * tb_size * sizeof(G1) + 
+                       num_party * su * sizeof(G1) + 
                        num_party * 2 * sizeof(G1) +  
                        sizeof(G1) +        
                        num_party * sizeof(G1) +
@@ -121,13 +122,13 @@ void LVT<IO>::save_full_state(const std::string& filename) {
     char* ptr = buffer.data();
     memcpy(ptr, &num_party, sizeof(int)); ptr += sizeof(int);
     memcpy(ptr, &party, sizeof(int)); ptr += sizeof(int);
-    memcpy(ptr, &tb_size, sizeof(size_t)); ptr += sizeof(size_t);
-    memcpy(ptr, &m_size, sizeof(size_t)); ptr += sizeof(size_t);
+    memcpy(ptr, &su, sizeof(size_t)); ptr += sizeof(size_t);
+    memcpy(ptr, &ad, sizeof(size_t)); ptr += sizeof(size_t);
 
     const Fr& rot_fr = rotation.get_message();
     memcpy(ptr, &rot_fr, sizeof(Fr)); ptr += sizeof(Fr);
     
-    for (size_t i = 0; i < tb_size; i++) {
+    for (size_t i = 0; i < su; i++) {
         const Fr& fr = lut_share[i].get_message();
         memcpy(ptr, &fr, sizeof(Fr)); ptr += sizeof(Fr);
     }
@@ -140,19 +141,11 @@ void LVT<IO>::save_full_state(const std::string& filename) {
     memcpy(ptr, table.data(), table_size * sizeof(int64_t)); ptr += table_size * sizeof(int64_t);
     
     for (int i = 0; i < num_party; ++i) {
-        for (size_t j = 0; j < tb_size; ++j) {
+        for (size_t j = 0; j < su; ++j) {
             const G1& point = cip_lut[i][j].getPoint();
             memcpy(ptr, &point, sizeof(G1)); ptr += sizeof(G1);
         }
     }
-    
-    // for (int i = 0; i < num_party; ++i) {
-    //     const G1& c0 = cr_i[i].get_c0().getPoint();
-    //     const G1& c1 = cr_i[i].get_c1().getPoint();
-    //     memcpy(ptr, &c0, sizeof(G1)); ptr += sizeof(G1);
-    //     memcpy(ptr, &c1, sizeof(G1)); ptr += sizeof(G1);
-    // }
-    
     const G1& global_point = global_pk.get_pk().getPoint();
     memcpy(ptr, &global_point, sizeof(G1)); ptr += sizeof(G1);
     
@@ -188,15 +181,15 @@ void LVT<IO>::load_full_state(const std::string& filename) {
     
     memcpy(&num_party, ptr, sizeof(int)); ptr += sizeof(int);
     memcpy(&party, ptr, sizeof(int)); ptr += sizeof(int);
-    memcpy(&tb_size, ptr, sizeof(size_t)); ptr += sizeof(size_t);
-    memcpy(&m_size, ptr, sizeof(size_t)); ptr += sizeof(size_t);
+    memcpy(&su, ptr, sizeof(size_t)); ptr += sizeof(size_t);
+    memcpy(&ad, ptr, sizeof(size_t)); ptr += sizeof(size_t);
     
     Fr rot_fr;
     memcpy(&rot_fr, ptr, sizeof(Fr)); ptr += sizeof(Fr);
     rotation.set_message(rot_fr);
     
-    lut_share.resize(tb_size);
-    for (size_t i = 0; i < tb_size; i++) {
+    lut_share.resize(su);
+    for (size_t i = 0; i < su; i++) {
         Fr fr;
         memcpy(&fr, ptr, sizeof(Fr)); ptr += sizeof(Fr);
         lut_share[i].set_message(fr);
@@ -215,8 +208,8 @@ void LVT<IO>::load_full_state(const std::string& filename) {
 
     cip_lut.resize(num_party);
     for (int i = 0; i < num_party; ++i) {
-        cip_lut[i].resize(tb_size);
-        for (size_t j = 0; j < tb_size; ++j) {
+        cip_lut[i].resize(su);
+        for (size_t j = 0; j < su; ++j) {
             G1 point;
             memcpy(&point, ptr, sizeof(G1)); ptr += sizeof(G1);
             BLS12381Element elem;
@@ -276,12 +269,12 @@ LVT<IO>::LVT(int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, EL
     this->elgl = elgl;
     this->user_pk.resize(num_party);
     this->user_pk[party-1] = elgl->kp.get_pk();
-    this->tb_size = 1ULL << table_size;
-    this->m_size = 1ULL << m_bits;
+    this->su = 1ULL << table_size;
+    this->ad = 1ULL << m_bits;
     this->cip_lut.resize(num_party);
     // this->cr_i.resize(num_party);
-    this->lut_share.resize(tb_size);
-    this->G_tbs = BLS12381Element(tb_size);
+    this->lut_share.resize(su);
+    this->G_tbs = BLS12381Element(su);
     BLS12381Element::init();
     BLS12381Element g = BLS12381Element::generator();
     this->global_pk = DistKeyGen(1);
@@ -306,8 +299,8 @@ void LVT<IO>::initialize(std::string func_name, LVT<IO>*& lvt_ptr_ref, int num_p
     }
 }
 
-void build_safe_P_to_m(std::map<std::string, Fr>& P_to_m, int num_party, size_t m_size) {
-    size_t max_exponent = 2 * m_size * num_party;
+void build_safe_P_to_m(std::map<std::string, Fr>& P_to_m, int num_party, size_t ad) {
+    size_t max_exponent = 2 * ad * num_party;
     if (max_exponent <= 1<<8) {
         for (size_t i = 0; i <= max_exponent; ++i) {
             BLS12381Element g_i(i);
@@ -342,7 +335,7 @@ LVT<IO>::LVT(int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, EL
         in.read(reinterpret_cast<char*>(table.data()), size * sizeof(int64_t));
         in.close();
     } else {
-        deserializeTable(table, tableFile.c_str(), tb_size);
+        deserializeTable(table, tableFile.c_str(), su);
         std::ofstream out(table_cache, std::ios::binary);
         if (!out) throw std::runtime_error("Failed to create table cache");
         
@@ -372,7 +365,7 @@ LVT<IO>::LVT(int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, EL
             }
             in.close();
         } else {
-            build_safe_P_to_m(P_to_m, num_party, m_size);
+            build_safe_P_to_m(P_to_m, num_party, ad);
             std::ofstream out(p_to_m_cache, std::ios::binary);
             if (!out) throw std::runtime_error("Failed to create P_to_m cache");
             
@@ -411,56 +404,35 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
     vector<BLS12381Element> c1_;
     
     mcl::Vint bound;
-    bound.setStr(to_string(tb_size));
+    bound.setStr(to_string(su));
 
-    c0.resize(tb_size);
-    c1.resize(tb_size);
-    c0_.resize(tb_size);
-    c1_.resize(tb_size);
+    c0.resize(su);
+    c1.resize(su);
+    c0_.resize(su);
+    c1_.resize(su);
     ELGL_SK sbsk;
     ELGL_SK twosk;
 
     rotation.set_random(bound);
-    // Ciphertext my_rot_cipher = global_pk.encrypt(rotation);
-    // elgl->serialize_sendall(my_rot_cipher);
-    // for (int i = 1; i <= num_party; ++i) {
-    //     res.emplace_back(pool->enqueue([this, &my_rot_cipher, i]() {
-    //         if (i == party){
-    //             this->cr_i[party-1] = my_rot_cipher;
-    //         }else{
-    //             Ciphertext other_rot_cipher;
-    //             elgl->deserialize_recv(other_rot_cipher, i);
-    //             this->cr_i[i-1] = other_rot_cipher;
-    //         }
-    //     }));
-    // }
-    // for (auto & f : res) {
-    //     f.get();
-    // }
-    // res.clear();
-
-
     vector<BLS12381Element> ak;
     vector<BLS12381Element> bk;
     vector<BLS12381Element> dk;
     vector<BLS12381Element> ek;
-    ak.resize(tb_size);
-    bk.resize(tb_size);
-    dk.resize(tb_size);
-    ek.resize(tb_size);
-    mcl::Unit N(tb_size);
+    ak.resize(su);
+    bk.resize(su);
+    dk.resize(su);
+    ek.resize(su);
+    mcl::Unit N(su);
     
     if(party == ALICE)
     {
-
-        // 加密表
-        vector<Plaintext> x(tb_size);
-        for(size_t i = 0; i < tb_size; i++){
+        vector<Plaintext> x(su);
+        for(size_t i = 0; i < su; i++){
             x[i] = Plaintext(Fr(this->table[i]));
         }
         vector<Plaintext> r1;
-        r1.resize(tb_size);
-        for(size_t i = 0; i < tb_size; i++){
+        r1.resize(su);
+        for(size_t i = 0; i < su; i++){
             r1[i].set_random();
             c0[i] = BLS12381Element(r1[i].get_message());
             c1[i] =  global_pk.get_pk() * r1[i].get_message() + BLS12381Element(x[i].get_message());
@@ -487,16 +459,16 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
         // 旋转
         Plaintext beta;
         vector<Plaintext> betak;
-        betak.resize(tb_size);
+        betak.resize(su);
 
         Plaintext::pow(beta, alpha, rotation);
         vector<Plaintext> sk;
-        sk.resize(tb_size);
-        for (size_t i = 0; i < tb_size; i++){
+        sk.resize(su);
+        for (size_t i = 0; i < su; i++){
             sk[i].set_random();
         }
 
-        for (size_t i = 0; i < tb_size; i++){
+        for (size_t i = 0; i < su; i++){
             res.push_back(pool->enqueue(
                 [this, i, &dk, &ek, &sk, &ak, &bk, &beta]()
                 {
@@ -518,7 +490,7 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
         res.clear();
 
         std::stringstream commit_ro, comm_ro_;
-        for (size_t j = 0; j < tb_size; j++)
+        for (size_t j = 0; j < su; j++)
         {
             dk[j].pack(commit_ro);
             ek[j].pack(commit_ro);
@@ -537,8 +509,8 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
     else if (party > 1 && party < num_party){
         vector<BLS12381Element> dk_thread;
         vector<BLS12381Element> ek_thread;
-        dk_thread.resize(tb_size);
-        ek_thread.resize(tb_size);
+        dk_thread.resize(su);
+        ek_thread.resize(su);
 
         std::stringstream comm_ro;
         std::string comm_raw;
@@ -546,7 +518,7 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
         elgl->deserialize_recv_(comm_ro, party - 1);
         comm_raw = comm_ro.str();
         comm_ << base64_decode(comm_raw);
-        for (size_t j = 0; j < tb_size; j++)
+        for (size_t j = 0; j < su; j++)
         {
             dk_thread[j].unpack(comm_);
             ek_thread[j].unpack(comm_);
@@ -556,15 +528,15 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
         // {
             vector<BLS12381Element> dk_;
             vector<BLS12381Element> ek_;
-            dk_.resize(tb_size);
-            ek_.resize(tb_size);
+            dk_.resize(su);
+            ek_.resize(su);
             Plaintext beta;
             Plaintext::pow(beta, alpha, rotation);
 
             vector<Plaintext> sk;
-            sk.resize(tb_size);
+            sk.resize(su);
             vector<std::future<void>> res_;
-            for (size_t i = 0; i < tb_size; i++){
+            for (size_t i = 0; i < su; i++){
                 res_.push_back(pool->enqueue(
                     [this, i, &dk_, &ek_, &sk, &dk_thread, &ek_thread, &beta]()
                     {
@@ -586,7 +558,7 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
             res_.clear();
 
             std::stringstream commit_ro;
-            for (size_t j = 0; j < tb_size; j++)
+            for (size_t j = 0; j < su; j++)
             {
                 dk_[j].pack(commit_ro);
                 ek_[j].pack(commit_ro);
@@ -613,8 +585,8 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
     else{
         vector<BLS12381Element> dk_thread;
         vector<BLS12381Element> ek_thread;
-        dk_thread.resize(tb_size);
-        ek_thread.resize(tb_size);
+        dk_thread.resize(su);
+        ek_thread.resize(su);
 
         std::stringstream comm_ro;
         std::string comm_raw;
@@ -622,7 +594,7 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
         elgl->deserialize_recv_(comm_ro, party - 1);
         comm_raw = comm_ro.str();
         comm_ << base64_decode(comm_raw);
-        for (size_t j = 0; j < tb_size; j++)
+        for (size_t j = 0; j < su; j++)
         {
             dk_thread[j].unpack(comm_);
             ek_thread[j].unpack(comm_);
@@ -632,15 +604,15 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
         // {
             vector<BLS12381Element> dk_;
             vector<BLS12381Element> ek_;
-            dk_.resize(tb_size);
-            ek_.resize(tb_size);
+            dk_.resize(su);
+            ek_.resize(su);
             Plaintext beta;
             Plaintext::pow(beta, alpha, rotation);
 
             vector<Plaintext> sk;
-            sk.resize(tb_size);
+            sk.resize(su);
             vector<std::future<void>> res_;
-            for (size_t i = 0; i < tb_size; i++){
+            for (size_t i = 0; i < su; i++){
                 res_.push_back(pool->enqueue(
                     [this, i, &dk_, &ek_, &sk, &dk_thread, &ek_thread, &beta]()
                     {
@@ -685,7 +657,7 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
             }
             res.clear();
 
-            for (size_t i = 0; i < tb_size; i++) {
+            for (size_t i = 0; i < su; i++) {
                 res.push_back(pool->enqueue([&c0_, &c1_, &N_inv, i]() {
                     c0_[i] *= N_inv;
                     c1_[i] *= N_inv;
@@ -698,7 +670,7 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
 
 
             std::stringstream commit_ro;
-            for (size_t j = 0; j < tb_size; j++)
+            for (size_t j = 0; j < su; j++)
             {
                 c0_[j].pack(commit_ro);
                 c1_[j].pack(commit_ro);
@@ -721,7 +693,7 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
         comm_raw = comm_ro.str();
         comm_ << base64_decode(comm_raw);
 
-        for (size_t j = 0; j < tb_size; j++)
+        for (size_t j = 0; j < su; j++)
         {
             c0_[j].unpack(comm_);
             c1_[j].unpack(comm_);
@@ -731,20 +703,20 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
     if (party == ALICE) {
         vector<Plaintext> y_alice;
         vector<BLS12381Element> L;
-        L.resize(tb_size);
+        L.resize(su);
         
         auto g = BLS12381Element::generator();
-        Fr e = Fr(to_string((num_party - 1) * m_size));
+        Fr e = Fr(to_string((num_party - 1) * ad));
         BLS12381Element base = g * e; 
-        vector<BLS12381Element> l_alice(tb_size, base);
+        vector<BLS12381Element> l_alice(su, base);
         
         vector<BLS12381Element> l_(num_party);
         for (size_t i = 2; i <= num_party; i++)
         {
             vector<BLS12381Element> y3;
             vector<BLS12381Element> y2;
-            y2.resize(tb_size);
-            y3.resize(tb_size);
+            y2.resize(su);
+            y3.resize(su);
             std::stringstream commit_ro;
             std::string comm_raw;
             std::stringstream comm_;
@@ -754,19 +726,19 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
             comm_ << base64_decode(comm_raw);
             
             BLS12381Element pk__ = user_pk[i-1].get_pk();
-            for (int j = 0; j < tb_size; j++){
+            for (int j = 0; j < su; j++){
                 y2[j].unpack(comm_);
                 y3[j].unpack(comm_);
             }
 
-            for (size_t j = 0; j < tb_size; j++)
+            for (size_t j = 0; j < su; j++)
             {
                 l_alice[j] -= y2[j];
             }
             cip_lut[i-1] = y3;
         }
         
-        for (size_t i = 0; i < tb_size; i++){
+        for (size_t i = 0; i < su; i++){
             res.push_back(pool->enqueue([&c1_, &l_alice, i]() {
                 l_alice[i] += c1_[i];
             }));
@@ -776,10 +748,10 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
         }
         res.clear();
 
-        cip_lut[0].resize(tb_size);
+        cip_lut[0].resize(su);
         bool flag = 0; 
-        if(m_size <= 131072) flag = 1;
-        for (size_t i = 0; i < tb_size; i++){
+        if(ad <= 131072) flag = 1;
+        for (size_t i = 0; i < su; i++){
                 BLS12381Element Y = l_alice[i] - c0_[i] * elgl->kp.get_sk().get_sk(); 
                 Y.getPoint().normalize();
                 Fr y; 
@@ -800,7 +772,7 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
                 mcl::Vint y_;
                 y_ = y.getMpz();
                 mcl::Vint ms;  
-                ms.setStr(to_string(this->m_size));
+                ms.setStr(to_string(this->ad));
                 mcl::gmp::mod(r_, y_, ms);
                 Fr r;
                 r.setMpz(r_);
@@ -818,7 +790,7 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
         std::stringstream commit_b64_;
         
         // time prove
-        for (unsigned int j = 0; j < tb_size; ++j) {
+        for (unsigned int j = 0; j < su; ++j) {
             L[j].pack(commit_ss);
             cip_lut[0][j].pack(commit_ss);
         }   
@@ -838,15 +810,15 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
          res.clear();
 
     }else{
-        mcl::Vint bound(to_string(m_size));
+        mcl::Vint bound(to_string(ad));
         std::stringstream commit_ss;
         vector<BLS12381Element> l_1_v;
         vector<BLS12381Element> cip_v;
         // time
-        l_1_v.resize(tb_size);
-        cip_v.resize(tb_size);
+        l_1_v.resize(su);
+        cip_v.resize(su);
 
-        for (size_t i = 0; i < tb_size; i++) {
+        for (size_t i = 0; i < su; i++) {
             lut_share[i].set_random(bound);
             BLS12381Element l_1, cip_;
             l_1 = BLS12381Element(lut_share[i].get_message());
@@ -859,7 +831,7 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
         }
         cip_lut[party-1] = cip_v;
 
-        for (unsigned int j = 0; j < tb_size; ++j) {
+        for (unsigned int j = 0; j < su; ++j) {
             l_1_v[j].pack(commit_ss);
             cip_v[j].pack(commit_ss);
         }
@@ -877,8 +849,8 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
             {
                 vector<BLS12381Element> y3;
                 vector<BLS12381Element> y2;
-                y3.resize(tb_size);
-                y2.resize(tb_size);
+                y3.resize(su);
+                y2.resize(su);
                 std::stringstream commit_ro;
                 std::string comm_raw;
                 std::stringstream comm_;
@@ -886,7 +858,7 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
                 comm_raw = commit_ro.str();
                 comm_ << base64_decode(comm_raw);
                 BLS12381Element pk__ = user_pk[i-1].get_pk();
-                for (int j = 0; j < tb_size; j++){
+                for (int j = 0; j < su; j++){
                     y2[j].unpack(comm_);
                     y3[j].unpack(comm_);
                 }
@@ -902,10 +874,10 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
         comm_ << base64_decode(comm_raw_);
         vector<BLS12381Element> y2;
         vector<BLS12381Element> y3;
-        y2.resize(tb_size);
-        y3.resize(tb_size);
+        y2.resize(su);
+        y3.resize(su);
         BLS12381Element pk__ = user_pk[0].get_pk();
-        for (int j = 0; j < tb_size; j++){
+        for (int j = 0; j < su; j++){
             y2[j].unpack(comm_);
             y3[j].unpack(comm_);
         }
@@ -913,6 +885,91 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
         elgl->send_done(ALICE);
     }
 
+}
+
+
+template <typename IO>
+void LVT<IO>::generate_shares_(vector<Plaintext>& lut_share, Plaintext& rotation, vector<int64_t> table) {
+    size_t n = table.size();
+    lut_share.resize(su);
+    cip_lut.assign(num_party, vector<BLS12381Element>());
+    for (int p = 0; p < num_party; ++p) cip_lut[p].resize(su);
+    rotation.set_message(0); Fr k=0;
+    elgl->kp.sk.assign_sk(k);
+    elgl->kp.pk = ELGL_PK(elgl->kp.sk);
+    BLS12381Element tmp = BLS12381Element(0);
+    this->global_pk.assign_pk(tmp);
+    for (int p = 0; p < num_party; ++p) user_pk[p].assign_pk(tmp);
+    BLS12381Element pk = this->global_pk.get_pk(); 
+    BLS12381Element G = tmp;
+    size_t tnum = std::max<size_t>(1, thread_num);
+    size_t chosen_block_size = (n + tnum - 1) / tnum;
+    if (chosen_block_size == 0) chosen_block_size = 1;
+    bool is_consecutive = true;
+    if (n > 0) {
+        int64_t start = table[0];
+        for (size_t i = 0; i < n; ++i) {
+            if (table[i] != start + static_cast<int64_t>(i)) { is_consecutive = false; break; }
+        }
+    }
+    for (int p = 1; p < num_party; ++p) {
+        std::fill(cip_lut[p].begin(), cip_lut[p].begin() + n, pk);
+    }
+    vector<future<void>> tasks;
+    tasks.reserve(tnum + 4);
+    if (is_consecutive) {
+        size_t idx = 0;
+        while (idx < n) {
+            size_t bstart = idx;
+            size_t bend = std::min(n, bstart + chosen_block_size);
+            tasks.push_back(pool->enqueue([this, bstart, bend, G, pk, &table]() {
+                BLS12381Element start_point = BLS12381Element(static_cast<int64_t>(bstart + table[0]));
+                BLS12381Element cur = start_point;
+                for (size_t j = bstart; j < bend; ++j) {
+                    cip_lut[0][j] = cur + pk; 
+                    cur += G;
+                }
+            }));
+            idx = bend;
+        }
+    } else {
+        size_t idx = 0;
+        while (idx < n) {
+            size_t bstart = idx;
+            size_t bend = std::min(n, bstart + chosen_block_size);
+            tasks.push_back(pool->enqueue([this, bstart, bend, &table, pk]() {
+                for (size_t j = bstart; j < bend; ++j) {
+                    cip_lut[0][j] = BLS12381Element(table[j]) + pk;
+                }
+            }));
+            idx = bend;
+        }
+    }
+    for (auto &f : tasks) f.get();
+    tasks.clear();
+    if (party == 1) {
+        size_t idx = 0;
+        while (idx < n) {
+            size_t bstart = idx;
+            size_t bend = std::min(n, bstart + chosen_block_size);
+            tasks.push_back(pool->enqueue([bstart, bend, &lut_share, &table]() {
+                for (size_t j = bstart; j < bend; ++j) lut_share[j].set_message(table[j]);
+            }));
+            idx = bend;
+        }
+    } else {
+        size_t idx = 0;
+        while (idx < n) {
+            size_t bstart = idx;
+            size_t bend = std::min(n, bstart + chosen_block_size);
+            tasks.push_back(pool->enqueue([bstart, bend, &lut_share]() {
+                for (size_t j = bstart; j < bend; ++j) lut_share[j].set_message(0);
+            }));
+            idx = bend;
+        }
+    }
+    for (auto &f : tasks) f.get();
+    tasks.clear();
 }
 
 template <typename IO>
@@ -1020,7 +1077,7 @@ Fr thdcp(Ciphertext& c, ELGL<IO>* elgl, const ELGL_PK& global_pk, const std::vec
 
     std::string key = pi_ask.getPoint().getStr();
     Fr y;
-    if(lvt->m_size <= 131072) {
+    if(lvt->ad <= 131072) {
         auto it = P_to_m.find(key);
         bool t = 1;
         if (it == P_to_m.end()) {
@@ -1132,13 +1189,13 @@ Plaintext LVT<IO>::lookup_online(Plaintext& x_share){
         uu += u_shares[i];
     }
     mcl::Vint h;
-    h.setStr(to_string(tb_size));
+    h.setStr(to_string(su));
     mcl::Vint q1 = uu.get_message().getMpz();
     mcl::gmp::mod(q1, q1, h);
     uu.assign(q1.getStr());
 
     mcl::Vint tbs;
-    tbs.setStr(to_string(tb_size));
+    tbs.setStr(to_string(su));
     mcl::Vint u_mpz = uu.get_message().getMpz(); 
     mcl::gmp::mod(u_mpz, u_mpz, tbs);
 
@@ -1157,64 +1214,108 @@ Plaintext LVT<IO>::lookup_online(Plaintext& x_share){
 
 template <typename IO>
 vector<Plaintext> LVT<IO>::lookup_online_batch(vector<Plaintext>& x_share){
-    auto start = clock_start();
-    uint64_t bytes_start = io->get_total_bytes_sent();
-
     size_t x_size = x_share.size();
     vector<Plaintext> out(x_size);
     vector<Plaintext> uu(x_size);
 
-    // build local uu = x_share + rotation
-    for (size_t i = 0; i < x_size; i++) {
-        uu[i] = x_share[i] + this->rotation;
+    if (x_size == 0) return out;
+
+    size_t tnum = std::max<size_t>(1, thread_num);
+    size_t block_size = (x_size + tnum - 1) / tnum;
+    if (block_size == 0) block_size = 1;
+
+    //------------------------------------------------------------
+    // 1. 并行计算 uu[i] = x_share[i] + rotation
+    //------------------------------------------------------------
+    {
+        vector<future<void>> futs;
+        for (size_t b = 0; b < x_size; b += block_size) {
+            size_t bstart = b;
+            size_t bend = std::min(x_size, b + block_size);
+
+            futs.push_back(pool->enqueue([this, bstart, bend, &x_share, &uu]() {
+                for (size_t i = bstart; i < bend; ++i)
+                    uu[i] = x_share[i] + this->rotation;
+            }));
+        }
+        for (auto &f : futs) f.get();
     }
 
-    // pack entire uu into a stream and broadcast to all others
+    //------------------------------------------------------------
+    // 2. pack 数据流串行执行 (不做并行)
+    //------------------------------------------------------------
     std::stringstream send_ss;
-    for (size_t i = 0; i < x_size; ++i) {
+    for (size_t i = 0; i < x_size; ++i)
         uu[i].pack(send_ss);
-    }
-    // send packed batch (with sender id prefix) to all other parties
+
     elgl->serialize_sendall_(send_ss);
 
-    // receive packed batches from all other parties concurrently
-    vector<std::future<vector<Plaintext>>> recv_futs;
+    //------------------------------------------------------------
+    // 3. 各方 recv 并 unpack（只能串行 unpack，避免数据流乱序）
+    //    但接收任务本身仍可并行
+    //------------------------------------------------------------
+    vector<future<vector<Plaintext>>> recv_futs;
+    recv_futs.reserve(num_party - 1);
+
     for (int p = 1; p <= num_party; ++p) {
         if (p == party) continue;
+
         recv_futs.push_back(pool->enqueue([this, p, x_size]() -> vector<Plaintext> {
             std::stringstream recv_ss;
             elgl->deserialize_recv_(recv_ss, p);
+
             vector<Plaintext> tmp(x_size);
-            for (size_t j = 0; j < x_size; ++j) {
-                tmp[j].unpack(recv_ss);
-            }
+            for (size_t j = 0; j < x_size; ++j)
+                tmp[j].unpack(recv_ss);   // unpack 串行 OK，不并行
+
             return tmp;
         }));
     }
 
-    // accumulate received shares into uu
-    for (auto &f : recv_futs) {
-        vector<Plaintext> tmp = f.get();
-        for (size_t j = 0; j < x_size; ++j) {
-            uu[j] += tmp[j];
+    vector<vector<Plaintext>> recv_results;
+    for (auto &f : recv_futs)
+        recv_results.push_back(f.get());
+
+    //------------------------------------------------------------
+    // 4. 并行累加 uu[j] += tmp[j]
+    //------------------------------------------------------------
+    for (auto &tmp_vec : recv_results) {
+        vector<future<void>> futs;
+        for (size_t b = 0; b < x_size; b += block_size) {
+            size_t bstart = b;
+            size_t bend = std::min(x_size, b + block_size);
+
+            futs.push_back(pool->enqueue([bstart, bend, &uu, &tmp_vec]() {
+                for (size_t j = bstart; j < bend; ++j)
+                    uu[j] += tmp_vec[j];
+            }));
         }
+        for (auto &f : futs) f.get();
     }
 
-    // for each uu compute index and lookup
-    mcl::Vint tbs; tbs.setStr(to_string(tb_size));
-    for (size_t i = 0; i < x_size; ++i) {
-        // reduce modulo tb_size
-        mcl::Vint u_mpz = uu[i].get_message().getMpz();
-        mcl::gmp::mod(u_mpz, u_mpz, tbs);
-        mcl::Vint index_mpz; index_mpz.setStr(u_mpz.getStr());
-        size_t index = static_cast<size_t>(index_mpz.getLow32bit());
-        out[i] = this->lut_share[index];
-    }
+    //------------------------------------------------------------
+    // 5. 并行完成：(uu mod su) -> index -> out
+    //------------------------------------------------------------
+    {
+        mcl::Vint tbs; tbs.setStr(to_string(su));
+        vector<future<void>> futs;
 
-    uint64_t bytes_end = io->get_total_bytes_sent();
-    double comm_mb = double(bytes_end - bytes_start) / 1024.0 / 1024.0;
-    std::cout << "Online batch time: " << std::fixed << std::setprecision(6) << time_from(start) / 1e6 << " seconds, "
-              << std::fixed << std::setprecision(6) << "Online communication: " << comm_mb << " MB" << std::endl;
+        for (size_t b = 0; b < x_size; b += block_size) {
+            size_t bstart = b;
+            size_t bend = std::min(x_size, b + block_size);
+
+            futs.push_back(pool->enqueue([this, bstart, bend, &uu, &out, &tbs]() {
+                for (size_t i = bstart; i < bend; ++i) {
+                    mcl::Vint u_mpz = uu[i].get_message().getMpz();
+                    mcl::gmp::mod(u_mpz, u_mpz, tbs);
+
+                    size_t index = static_cast<size_t>(u_mpz.getLow32bit());
+                    out[i] = this->lut_share[index];
+                }
+            }));
+        }
+        for (auto &f : futs) f.get();
+    }
 
     return out;
 }
@@ -1246,9 +1347,9 @@ Fr alpha_init(int num) {
     Plaintext alpha;
     const mcl::Vint p("0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001");
     const mcl::Vint g("5");
-    mcl::Vint tb_size = mcl::Vint(1) << num;
+    mcl::Vint su = mcl::Vint(1) << num;
     mcl::Vint alpha_vint;
-    mcl::gmp::powMod(alpha_vint, g, (p - 1) / tb_size, p);
+    mcl::gmp::powMod(alpha_vint, g, (p - 1) / su, p);
     alpha.assign(alpha_vint.getStr());
     return alpha.get_message();
 }

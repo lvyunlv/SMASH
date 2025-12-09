@@ -4,7 +4,6 @@
 #include "Range_Proof.h"
 #include "libelgl/elgl/Ciphertext.h"
 #include "emp-aby/utils.h"
-
 class RangeProver{
     std::vector <Plaintext> r1, r2;
     public:

@@ -20,78 +20,55 @@ int num_party;
 
 int main(int argc, char** argv) {
     BLS12381Element::init();
-    if (argc < 4) {
-        std::cout << "Format: <PartyID> <port> <num_parties> [tablefile|network]" << std::endl;
-        std::cout << "Network options: local, lan, wan" << std::endl;
+    if (argc < 5) {
+        std::cout << "Format: <PartyID> <port> <num_parties> <network_condition>" << std::endl;
         return 0;
     }
     parse_party_and_port(argv, &party, &port);
     num_party = std::stoi(argv[3]);
-
+    std::string network_condition = argv[4];
+    initialize_network_conditions(network_condition);
     std::vector<std::pair<std::string, unsigned short>> net_config;
-    // 支持传入网络条件："local", "lan", "wan"，或传入一个 net config 文件路径
-    if (argc == 5) {
-        const std::string arg4 = argv[4];
-        if (arg4 == "local" || arg4 == "lan" || arg4 == "wan") {
-            // 初始化网络模拟条件
-            initialize_network_conditions(arg4);
+    if (argc >= 6) {
+        const char* file = argv[5];
+        FILE* f = fopen(file, "r");
+        if (f != nullptr) {
             for (int i = 0; i < num_party; ++i) {
-                net_config.push_back({ "127.0.0.1", static_cast<unsigned short>(port + 4 * num_party * i) });
-            }
-        } else {
-            const char* file = argv[4];
-            FILE* f = fopen(file, "r");
-            if (!f) {
-                std::cerr << "Error: cannot open net config file: " << file << std::endl;
-                return 1;
-            }
-            for (int i = 0; i < num_party; ++i) {
-                char* c = (char*)malloc(256 * sizeof(char));
-                unsigned int p;
-                if (fscanf(f, "%s %u", c, &p) != 2) {
-                    std::cerr << "Error: bad net config format in file: " << file << std::endl;
-                    free(c);
-                    fclose(f);
-                    return 1;
-                }
-                net_config.push_back(std::make_pair(std::string(c), static_cast<unsigned short>(p)));
-                free(c);
+                char* c = (char*)malloc(15 * sizeof(char));
+                uint p;
+                fscanf(f, "%s %u", c, &p);
+                net_config.push_back(std::make_pair(std::string(c), p));
+                fflush(f);
             }
             fclose(f);
+        } else {
+            for (int i = 0; i < num_party; ++i) {
+                net_config.push_back({ "127.0.0.1", (unsigned short)(port + 4 * num_party * i) });
+            }
+        }
+        std::cout << "Try open config file: " << file << std::endl;
+        if (f == nullptr) {
+            std::cout << "FAILED TO OPEN CONFIG FILE" << std::endl;
         }
     } else {
         for (int i = 0; i < num_party; ++i) {
-            net_config.push_back({ "127.0.0.1", static_cast<unsigned short>(port + 4 * num_party * i) });
+            net_config.push_back({ "127.0.0.1", (unsigned short)(port + 4 * num_party * i) });
         }
     }
-
     ThreadPool pool(threads);
     MultiIO* io = new MultiIO(party, num_party, net_config);
     ELGL<MultiIOBase>* elgl = new ELGL<MultiIOBase>(num_party, io, &pool, party); 
-    int aln = 8; int tb_size = 1ULL << aln; 
-    Fr alpha_fr = alpha_init(aln);
-    std::string tablefile = "init";
+    std::string tablefile = "init"; int aln = 20; int tb_size = 1ULL << aln; Fr alpha_fr = alpha_init(aln);
     emp::LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party, party, io, &pool, elgl, tablefile, alpha_fr, aln, aln);
-    cout << "Table size: " << tb_size << endl;
-    cout << "Number of parties: " << num_party << endl;
     size_t initial_memory = get_current_memory_usage();
-    std::cout << "Initial memory usage: " << initial_memory / 1024.0 / 1024.0 << " MB" << std::endl;
-    
     lvt->DistKeyGen(1);
-    cout << "Finish DistKeyGen" << endl;
-
     int bytes_start = io->get_total_bytes_sent();
     auto t1 = std::chrono::high_resolution_clock::now();
-
-    lvt->generate_shares(lvt->lut_share, lvt->rotation, lvt->table);
-    cout << "Finish generate_shares" << endl;
-
+    lvt->generate_shares_(lvt->lut_share, lvt->rotation, lvt->table);
     int bytes_end = io->get_total_bytes_sent();
     auto t2 = std::chrono::high_resolution_clock::now();
     float comm_kb = float(bytes_end - bytes_start) / 1024.0 / 1024.0;
     float time_ms = std::chrono::duration<float, std::milli>(t2 - t1).count() / 1000.0;
-    cout << "Offline time: " << time_ms << " s, comm: " << comm_kb << " MB" << std::endl;
-
     std::vector<Plaintext> x_share;
     std::string input_file = "../Input/Input-P.txt";
     {
@@ -113,7 +90,6 @@ int main(int argc, char** argv) {
         }
     }
     int x_size = x_share.size();
-    cout << "Finish input generation" << endl;
     Plaintext x_size_pt; x_size_pt.assign(x_size);
     elgl->serialize_sendall(x_size_pt);
     for (int i = 1; i <= num_party; i++) {
@@ -128,36 +104,61 @@ int main(int argc, char** argv) {
     }
     Plaintext tb_field = Plaintext(tb_size);
     vector<Plaintext> x_sums(x_size);
-    for (int i = 0; i < x_size; ++i) x_sums[i] = x_share[i];
+    std::vector<std::future<void>> futs;
+    futs.reserve(x_size);
+    for (int i = 0; i < x_size; ++i) {
+        futs.emplace_back(pool.enqueue([i, &x_sums, &x_share]() {
+            x_sums[i] = x_share[i];
+        }));
+    }
+    for (auto &f : futs) f.get();
     std::stringstream send_xss;
     for (int i = 0; i < x_size; ++i) {
         x_sums[i].pack(send_xss);
     }
-    std::cout << "[P" << party << "] broadcasting " << x_size << " x_sums" << std::endl;
     elgl->serialize_sendall_(send_xss);
     for (int p = 1; p <= num_party; ++p) {
         if (p == party) continue;
         std::stringstream recv_ss;
         elgl->deserialize_recv_(recv_ss, p);
+        std::vector<Plaintext> tmp_recv(x_size);
         for (int i = 0; i < x_size; ++i) {
-            Plaintext px;
-            px.unpack(recv_ss);
-            x_sums[i] += px;
-            x_sums[i] = x_sums[i] % tb_field;
+            tmp_recv[i].unpack(recv_ss);
         }
-        std::cout << "[P" << party << "] received x_sums from party " << p << std::endl;
+        {
+            std::vector<std::future<void>> futs;
+            futs.reserve(x_size);
+
+            for (int i = 0; i < x_size; ++i) {
+                futs.emplace_back(pool.enqueue([i, &x_sums, &tmp_recv, &tb_field]() {
+                    x_sums[i] += tmp_recv[i];
+                    x_sums[i] = x_sums[i] % tb_field;
+                }));
+            }
+            for (auto &f : futs) f.get();
+        }
+
+    }
+    vector<Plaintext> table_pts(x_size);
+    {
+        std::vector<std::future<void>> futs;
+        futs.reserve(x_size);
+
+        for (int i = 0; i < x_size; ++i) {
+            futs.emplace_back(pool.enqueue([i, &table_pts, &x_sums, &lvt]() {
+                uint64_t idx = x_sums[i].get_message().getUint64();
+                uint64_t table_x = lvt->table[idx];
+                table_pts[i] = Plaintext(table_x);
+            }));
+        }
+        for (auto &f : futs) f.get();
     }
     std::stringstream send_tabless;
-    vector<Plaintext> table_pts(x_size);
     for (int i = 0; i < x_size; ++i) {
-        uint64_t table_x = lvt->table[x_sums[i].get_message().getUint64()];
-        table_pts[i] = Plaintext(table_x);
         table_pts[i].pack(send_tabless);
     }
-    std::cout << "[P" << party << "] broadcasting " << x_size << " table_pts" << std::endl;
     elgl->serialize_sendall_(send_tabless);
 
-    // receive table batches from others and verify
     for (int p = 1; p <= num_party; ++p) {
         if (p == party) continue;
         std::stringstream recv_ss;
@@ -170,9 +171,7 @@ int main(int argc, char** argv) {
                 return 1;
             }
         }
-        std::cout << "[P" << party << "] received table_pts from party " << p << std::endl;
     }
- cout << "here" << endl;
     std::vector<Plaintext> out(x_size);
     int bytes_start1 = io->get_total_bytes_sent();
     auto t3 = std::chrono::high_resolution_clock::now();

@@ -538,38 +538,31 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
             FFT_Para(c1, bk, this->alpha, N);
         }
     ));
-    for (auto& f : res) {
-        f.get();
-    }
+    for (auto& f : res) f.get();
     res.clear();
-    
     if (party == ALICE)
     {
         Plaintext beta;
-        vector<Plaintext> betak;
-        betak.resize(su);
+        vector<Plaintext> betak(su);
         Plaintext::pow(beta, alpha, rotation);
-        vector<Plaintext> sk;
-        sk.resize(su);
+        vector<Plaintext> sk(su);
+        sk[0].set_random();
+        std::fill(sk.begin(), sk.begin() + su, sk[0]);
+        BLS12381Element dkk = BLS12381Element(1) * sk[0].get_message();
+        BLS12381Element ekk = global_pk.get_pk() * sk[0].get_message();
         for (size_t i = 0; i < su; i++){
             res.push_back(pool->enqueue(
-                [this, i, &dk, &ek, &sk, &ak, &bk, &beta]()
-                {
-                    sk[i].set_random();
+                [this, i, &dk, &ek, &sk, &ak, &bk, &beta, &dkk, &ekk](){
                     Plaintext betak_;
                     Plaintext i_;
                     i_.assign(to_string(i));
                     Plaintext::pow(betak_, beta, i_);
-                    dk[i] = BLS12381Element(1) * sk[i].get_message();
-                    dk[i] += ak[i] * betak_.get_message();
-                    ek[i] = global_pk.get_pk() * sk[i].get_message();
-                    ek[i] += bk[i] * betak_.get_message();
+                    dk[i] = dkk + ak[i] * betak_.get_message();
+                    ek[i] = ekk + bk[i] * betak_.get_message();
                 }
             ));
         }
-        for (auto& f : res) {
-            f.get();
-        }
+        for (auto& f : res) f.get();
         res.clear();
         std::stringstream commit_ro, response_ro;
         Rot_prover.NIZKPoK(rot_proof, commit_ro, response_ro, global_pk, global_pk, dk, ek, ak, bk, beta, sk, pool);
@@ -578,7 +571,6 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
         comm_ro_ << base64_encode(comm_raw);
         std::string response_raw = response_ro.str();
         response_ro_ << base64_encode(response_raw);
-        
         elgl->serialize_sendall_(comm_ro_);
         elgl->serialize_sendall_(response_ro_);
     }
@@ -604,30 +596,27 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
                 comm_ << base64_decode(comm_raw);
                 response_ << base64_decode(response_raw);
                 Rot_verifier.NIZKPoK(dk_thread, ek_thread, ak_thread, bk_thread, comm_, response_, this->global_pk, this->global_pk, pool);
-                if (i == this->party - 1)
-                {
-                    vector<BLS12381Element> dk_;
-                    vector<BLS12381Element> ek_;
-                    dk_.resize(su);
-                    ek_.resize(su);
+                if (i == this->party - 1) {
+                    vector<BLS12381Element> dk_(su);
+                    vector<BLS12381Element> ek_(su);
                     Plaintext beta;
                     Plaintext::pow(beta, alpha, rotation);
-                    vector<Plaintext> sk;
-                    sk.resize(su);
+                    vector<Plaintext> sk(su);
                     vector<std::future<void>> res_;
+                    sk[0].set_random();
+                    std::fill(sk.begin(), sk.begin() + su, sk[0]);
+                    BLS12381Element dkk = BLS12381Element(1) * sk[0].get_message();
+                    BLS12381Element ekk = global_pk.get_pk() * sk[0].get_message();
                     for (size_t i = 0; i < su; i++){
                         res_.push_back(pool->enqueue(
-                            [this, i, &dk_, &ek_, &sk, &ak_thread, &bk_thread, &dk_thread, &ek_thread, &beta]()
+                            [this, i, &dk_, &ek_, &sk, &ak_thread, &bk_thread, &dk_thread, &ek_thread, &beta, &dkk, &ekk]()
                             {
                                 Plaintext betak;
                                 Plaintext i_;
                                 i_.assign(to_string(i));
                                 Plaintext::pow(betak, beta, i_);
-                                dk_[i] = dk_thread[i] * betak.get_message();
-                                ek_[i] = ek_thread[i] * betak.get_message();
-                                sk[i].set_random();
-                                dk_[i] += BLS12381Element(sk[i].get_message());
-                                ek_[i] += global_pk.get_pk() * sk[i].get_message();
+                                dk_[i] = dkk + dk_thread[i] * betak.get_message();
+                                ek_[i] = ekk + ek_thread[i] * betak.get_message();
                             }
                         ));
                     }
@@ -700,17 +689,14 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
         f.get();
     }
     res.clear();
-
     if (party == ALICE) {
         vector<Plaintext> y_alice;
         vector<BLS12381Element> L;
         L.resize(su);
-        
         auto g = BLS12381Element::generator();
         Fr e = Fr(to_string((num_party - 1) * ad));
         BLS12381Element base = g * e; 
         vector<BLS12381Element> l_alice(su, base);
-        
         vector<BLS12381Element> l_(num_party);
         for (size_t i = 2; i <= num_party; i++)
         {
@@ -883,26 +869,6 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
     //     std::cout << "table[" << i << "]:" << lut_share[i].get_message().getStr() << " " << std::endl;
     // }
 }
-// Optimized version of LVT<IO>::generate_shares_
-// Key ideas used:
-// 1. Detect if `table` is consecutive with stride 1 (common case table[i]=i).
-//    If so, fill cip_lut[0] by computing a small number of scalar muls (one per block)
-//    and then using repeated EC addition (fast) to fill the block.
-//    This replaces millions of expensive scalar multiplications with a few (thread_num)
-//    scalar muls + many cheap EC additions.
-// 2. For parties p>=1, cip_lut[p][i] is constant (global_pk). Fill with std::fill.
-// 3. Use block-parallelism: one task per block. Avoid launching a task per index.
-// 4. Use thread-safe captures (capture block indices by value) and minimize repeated calls
-//    to getters (cache global_pk.get_pk() once).
-// 5. Fill lut_share also in blocks using std::fill or copying table values.
-
-// NOTE: Adjust calls to BLS12381Element API if your actual library names differ.
-//       This code assumes the following API (based on the original code):
-//       - BLS12381Element::generator() -> returns generator point G
-//       - BLS12381Element::zero() -> returns identity point
-//       - BLS12381Element(int64_t scalar) -> scalar * G (used only for a few block starts)
-//       - operator+(const BLS12381Element&) and operator+=(...)
-//       - get_pk() returns a BLS12381Element by value
 
 template <typename IO>
 void LVT<IO>::generate_shares_(vector<Plaintext>& lut_share, Plaintext& rotation, vector<int64_t> table) {
@@ -910,10 +876,10 @@ void LVT<IO>::generate_shares_(vector<Plaintext>& lut_share, Plaintext& rotation
     lut_share.resize(su);
     cip_lut.assign(num_party, vector<BLS12381Element>());
     for (int p = 0; p < num_party; ++p) cip_lut[p].resize(su);
-    rotation.set_message(0); Fr k=0;
+    rotation.set_message(0); Fr k=1;
     elgl->kp.sk.assign_sk(k);
     elgl->kp.pk = ELGL_PK(elgl->kp.sk);
-    BLS12381Element tmp = BLS12381Element(0);
+    BLS12381Element tmp = BLS12381Element(num_party);
     this->global_pk.assign_pk(tmp);
     for (int p = 0; p < num_party; ++p) user_pk[p].assign_pk(tmp);
     cr_i[party-1] = global_pk.encrypt(rotation);

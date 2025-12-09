@@ -17,10 +17,8 @@ int main(int argc, char** argv) {
     }
     parse_party_and_port(argv, &party, &port);
     num_party = std::stoi(argv[3]);
-
     std::string network_condition = argv[4];
     initialize_network_conditions(network_condition);
-
     std::vector<std::pair<std::string, unsigned short>> net_config;
     if (argc >= 6) {
         const char* file = argv[5];
@@ -35,7 +33,6 @@ int main(int argc, char** argv) {
             }
             fclose(f);
         } else {
-            // fallback to localhost ports if file open fails
             for (int i = 0; i < num_party; ++i) {
                 net_config.push_back({ "127.0.0.1", (unsigned short)(port + 4 * num_party * i) });
             }
@@ -52,7 +49,7 @@ int main(int argc, char** argv) {
     ThreadPool pool(threads);
     MultiIO* io = new MultiIO(party, num_party, net_config);
     ELGL<MultiIOBase>* elgl = new ELGL<MultiIOBase>(num_party, io, &pool, party);
-    std::string tablefile = "init"; int aln = 9; Fr alpha_fr = alpha_init(aln);
+    std::string tablefile = "init"; int aln = 12; Fr alpha_fr = alpha_init(aln);
     emp::LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party, party, io, &pool, elgl, tablefile, alpha_fr, aln, aln);
     cout << "Number of parties: " << num_party << endl;
     lvt->DistKeyGen(1);

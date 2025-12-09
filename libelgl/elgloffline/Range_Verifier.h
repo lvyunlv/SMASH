@@ -3,7 +3,6 @@
 
 #include "Range_Proof.h"
 #include "emp-aby/utils.h"
-
 class RangeVerifier{
     RangeProof &P;
     public:
@@ -13,6 +12,5 @@ class RangeVerifier{
                 const ELGL_PK& pk, ThreadPool* pool);
 
     // size_t report_size(){return sx.size() * sizeof(modp) + sr.size() * sizeof(modp);};
-
 };
 #endif
