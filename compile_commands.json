@@ -205,6 +205,12 @@
 },
 {
   "directory": "/workspace/lyl/SMASH/testLYL",
+  "command": "/usr/bin/c++ -DEMP_CIRCUIT_PATH=/usr/local/include/emp-tool/circuits/files/ -DMCLBN_NO_AUTOLINK -DMCL_NO_AUTOLINK -DMCL_USE_LLVM=1 -I/workspace/lyl/SMASH/emp-tool -I/workspace/lyl/SMASH/external/openssl/include -I/workspace/lyl/SMASH -I/workspace/lyl/SMASH/external/mcl/include -I/workspace/lyl/SMASH/libelgl -I/usr/local/include/openfhe -I/usr/local/include/openfhe/third-party/include -I/usr/local/include/openfhe/core -I/usr/local/include/openfhe/pke -I/workspace/lyl/SMASH/libelgl/elgl -I/workspace/lyl/SMASH/libelgl/elgloffline   -O3 -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -DMATHBACKEND=4 -fopenmp -O3 -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -Wno-sign-compare -DLIBS_USE_LIBUV -DLIBS_USE_OPENSSL -pthread -Wall -funroll-loops -Wno-ignored-attributes -Wno-unused-result -march=native -maes -mrdseed -std=c++11 -O3 -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles/test_lvt_online.dir/lvt_online.cpp.o -c /workspace/lyl/SMASH/testLYL/lvt_online.cpp",
+  "file": "/workspace/lyl/SMASH/testLYL/lvt_online.cpp",
+  "output": "testLYL/CMakeFiles/test_lvt_online.dir/lvt_online.cpp.o"
+},
+{
+  "directory": "/workspace/lyl/SMASH/testLYL",
   "command": "/usr/bin/c++ -DEMP_CIRCUIT_PATH=/usr/local/include/emp-tool/circuits/files/ -DMCLBN_NO_AUTOLINK -DMCL_NO_AUTOLINK -DMCL_USE_LLVM=1 -I/workspace/lyl/SMASH/emp-tool -I/workspace/lyl/SMASH/external/openssl/include -I/workspace/lyl/SMASH -I/workspace/lyl/SMASH/external/mcl/include -I/workspace/lyl/SMASH/libelgl -I/usr/local/include/openfhe -I/usr/local/include/openfhe/third-party/include -I/usr/local/include/openfhe/core -I/usr/local/include/openfhe/pke -I/workspace/lyl/SMASH/libelgl/elgl -I/workspace/lyl/SMASH/libelgl/elgloffline   -O3 -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -DMATHBACKEND=4 -fopenmp -O3 -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -Wno-sign-compare -DLIBS_USE_LIBUV -DLIBS_USE_OPENSSL -pthread -Wall -funroll-loops -Wno-ignored-attributes -Wno-unused-result -march=native -maes -mrdseed -std=c++11 -O3 -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles/test_lvt_semi.dir/lvt_semi.cpp.o -c /workspace/lyl/SMASH/testLYL/lvt_semi.cpp",
   "file": "/workspace/lyl/SMASH/testLYL/lvt_semi.cpp",
   "output": "testLYL/CMakeFiles/test_lvt_semi.dir/lvt_semi.cpp.o"

@@ -1,7 +1,7 @@
 #!/bin/bash
 # 文件路径: /workspace/lyl/SMASH/run_lvt_experiment.sh
 
-BASE_DIR="$HOME/SMASH"
+BASE_DIR="/workspace/lyl/SMASH"
 BIN_DIR="$BASE_DIR/bin"
 RESULTS_DIR="$BASE_DIR/Results"
 OUTPUT_FILE="$RESULTS_DIR/online_10k_1server.txt"
@@ -28,7 +28,7 @@ for n in "${NS[@]}"; do
         for ((i=1;i<=n;i++)); do
             TMP_FILE=$(mktemp)
             TMP_FILES+=("$TMP_FILE")
-            "$BIN_DIR/test_lvt" "$i" $((2222)) "$n" "$net" > "$TMP_FILE" 2>&1 &
+            "$BIN_DIR/test_lvt_online" "$i" $((32947)) "$n" "$net" > "$TMP_FILE" 2>&1 &
             PIDS+=($!)
         done
 

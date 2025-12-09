@@ -1,7 +1,7 @@
 #!/bin/bash
 # 文件路径: /workspace/lyl/SMASH/run_lvt_experiment.sh
 
-BASE_DIR="$HOME/SMASH"
+BASE_DIR="/workspace/lyl/SMASH"
 BIN_DIR="$BASE_DIR/bin"
 RESULTS_DIR="$BASE_DIR/Results"
 OUTPUT_FILE="$RESULTS_DIR/online_10k_2server.txt"
@@ -26,10 +26,10 @@ for n in "${NS[@]}"; do
         # 启动n个进程，使用端口从2222开始递增
         PIDS=()
         TMP_FILES=()
-        for ((i=1;i<=n/2;i++)); do
+        for ((i=n/2-1;i<=n;i++)); do
             TMP_FILE=$(mktemp)
             TMP_FILES+=("$TMP_FILE")
-            "$BIN_DIR/test_lvt" "$i" $((2222)) "$n" "$net" "$IP_FILE" > "$TMP_FILE" 2>&1 &
+            "$BIN_DIR/test_lvt_online" "$i" 0 "$n" "$net" "$IP_FILE" > "$TMP_FILE" 2>&1 &
             PIDS+=($!)
         done
 
