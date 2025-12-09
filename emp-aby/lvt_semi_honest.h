@@ -1217,16 +1217,10 @@ vector<Plaintext> LVT<IO>::lookup_online_batch(vector<Plaintext>& x_share){
     size_t x_size = x_share.size();
     vector<Plaintext> out(x_size);
     vector<Plaintext> uu(x_size);
-
     if (x_size == 0) return out;
-
     size_t tnum = std::max<size_t>(1, thread_num);
     size_t block_size = (x_size + tnum - 1) / tnum;
     if (block_size == 0) block_size = 1;
-
-    //------------------------------------------------------------
-    // 1. 并行计算 uu[i] = x_share[i] + rotation
-    //------------------------------------------------------------
     {
         vector<future<void>> futs;
         for (size_t b = 0; b < x_size; b += block_size) {
@@ -1240,45 +1234,26 @@ vector<Plaintext> LVT<IO>::lookup_online_batch(vector<Plaintext>& x_share){
         }
         for (auto &f : futs) f.get();
     }
-
-    //------------------------------------------------------------
-    // 2. pack 数据流串行执行 (不做并行)
-    //------------------------------------------------------------
     std::stringstream send_ss;
     for (size_t i = 0; i < x_size; ++i)
         uu[i].pack(send_ss);
-
     elgl->serialize_sendall_(send_ss);
-
-    //------------------------------------------------------------
-    // 3. 各方 recv 并 unpack（只能串行 unpack，避免数据流乱序）
-    //    但接收任务本身仍可并行
-    //------------------------------------------------------------
     vector<future<vector<Plaintext>>> recv_futs;
     recv_futs.reserve(num_party - 1);
-
     for (int p = 1; p <= num_party; ++p) {
         if (p == party) continue;
-
         recv_futs.push_back(pool->enqueue([this, p, x_size]() -> vector<Plaintext> {
             std::stringstream recv_ss;
             elgl->deserialize_recv_(recv_ss, p);
-
             vector<Plaintext> tmp(x_size);
             for (size_t j = 0; j < x_size; ++j)
-                tmp[j].unpack(recv_ss);   // unpack 串行 OK，不并行
-
+                tmp[j].unpack(recv_ss);
             return tmp;
         }));
     }
-
     vector<vector<Plaintext>> recv_results;
     for (auto &f : recv_futs)
         recv_results.push_back(f.get());
-
-    //------------------------------------------------------------
-    // 4. 并行累加 uu[j] += tmp[j]
-    //------------------------------------------------------------
     for (auto &tmp_vec : recv_results) {
         vector<future<void>> futs;
         for (size_t b = 0; b < x_size; b += block_size) {
@@ -1292,10 +1267,6 @@ vector<Plaintext> LVT<IO>::lookup_online_batch(vector<Plaintext>& x_share){
         }
         for (auto &f : futs) f.get();
     }
-
-    //------------------------------------------------------------
-    // 5. 并行完成：(uu mod su) -> index -> out
-    //------------------------------------------------------------
     {
         mcl::Vint tbs; tbs.setStr(to_string(su));
         vector<future<void>> futs;
@@ -1316,7 +1287,6 @@ vector<Plaintext> LVT<IO>::lookup_online_batch(vector<Plaintext>& x_share){
         }
         for (auto &f : futs) f.get();
     }
-
     return out;
 }
 

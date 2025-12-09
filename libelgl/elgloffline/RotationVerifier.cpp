@@ -60,7 +60,7 @@ void RotationVerifier::NIZKPoK(std::vector<BLS12381Element> &dx, std::vector<BLS
         BLS12381Element L, R;int n_tilde=32;Plaintext tmp;
         std::vector<std::future<void> >futures;
         futures.reserve(P.n_tilde);
-        for (size_t i = 0; i < n_tilde; i++){
+        for (size_t i = 0; i < P.n_tilde; i++){
             futures.push_back(pool->enqueue([&, i](){
                 std::stringstream tmp_pack;
                 tmp_pack.str("");
