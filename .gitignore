@@ -5,8 +5,8 @@ Testing/
 .exrc
 build/
 bin/
-emp-ot/
-emp-tool/
+# emp-ot/
+# emp-tool/
 CMakeCache.txt
 CMakeFiles/
 Makefile
