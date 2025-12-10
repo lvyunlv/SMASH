@@ -1,1 +1,7 @@
-n condition avg_time(s) avg_comm(MB)
+party online_time(s) comm(MB)
+4 4.92382 3.81474
+5 5.08033 3.81474
+6 5.0914 3.81474
+
+avg_time 5.03183
+avg_comm 3.81473

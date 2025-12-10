@@ -19,39 +19,49 @@ int main(int argc, char** argv) {
     initialize_network_conditions(network_condition);
     std::vector<std::pair<std::string, unsigned short>> net_config;
     if (argc >= 6) {
-        const char* file = argv[5];
-        FILE* f = fopen(file, "r");
-        if (f != nullptr) {
-            for (int i = 0; i < num_party; ++i) {
-                char* c = (char*)malloc(15 * sizeof(char));
-                uint p;
-                fscanf(f, "%s %u", c, &p);
-                net_config.push_back(std::make_pair(std::string(c), p));
-                fflush(f);
+    const char* file = argv[5];
+    std::cout << "[DEBUG] Trying to open config file: " << file << std::endl;
+    FILE* f = fopen(file, "r");
+    if (f != nullptr) {
+        std::cout << "[DEBUG] Config file opened successfully." << std::endl;
+        for (int i = 0; i < num_party; ++i) {
+            char* c = (char*)malloc(64 * sizeof(char));   // enlarge buffer
+            uint p;
+
+            std::cout << "[DEBUG] Reading line " << i << " ..." << std::endl;
+            int ret = fscanf(f, "%63s %u", c, &p);
+
+            std::cout << "[DEBUG] fscanf return = " << ret 
+                      << ", read host = " << c 
+                      << ", port = " << p << std::endl;
+
+            if (ret != 2) {
+                std::cerr << "[ERROR] fscanf failed at line " << i 
+                          << ", ret = " << ret 
+                          << ". File format error or EOF reached early!" << std::endl;
             }
-            fclose(f);
-        } else {
-            for (int i = 0; i < num_party; ++i) {
-                net_config.push_back({ "127.0.0.1", (unsigned short)(port + 4 * num_party * i) });
-            }
+            net_config.push_back(std::make_pair(std::string(c), p));
+            fflush(f);
         }
-        std::cout << "Try open config file: " << file << std::endl;
-        if (f == nullptr) {
-            std::cout << "FAILED TO OPEN CONFIG FILE" << std::endl;
-        }
+        std::cout << "[DEBUG] Finished reading config file." << std::endl;
+        fclose(f);
     } else {
+        std::cerr << "[ERROR] FAILED TO OPEN CONFIG FILE: " << file << std::endl;
         for (int i = 0; i < num_party; ++i) {
             net_config.push_back({ "127.0.0.1", (unsigned short)(port + 4 * num_party * i) });
         }
     }
+}
     ThreadPool pool(threads);
     MultiIO* io = new MultiIO(party, num_party, net_config);
     ELGL<MultiIOBase>* elgl = new ELGL<MultiIOBase>(num_party, io, &pool, party);
-    std::string tablefile = "init"; int aln = 20; Fr alpha_fr = alpha_init(aln);
+    std::string tablefile = "init"; int aln = 8; Fr alpha_fr = alpha_init(aln);
     emp::LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party, party, io, &pool, elgl, tablefile, alpha_fr, aln, aln);
     cout << "Number of parties: " << num_party << endl;
     lvt->DistKeyGen(0);
+    cout << "Key Generation Done." << endl;
     lvt->generate_shares_(lvt->lut_share, lvt->rotation, lvt->table);
+    cout << "Share Generation Done." << endl;
     std::vector<Plaintext> x_share;
     std::string input_mode = (argc >= 7) ? argv[6] : "txt";
     std::string input_file = "../Input/Input-P." + input_mode;
@@ -108,6 +118,7 @@ int main(int argc, char** argv) {
             }
         }
     }
+    cout << "Input size: " << x_size << endl;
     std::vector<Ciphertext> x_cipher(x_size);
     std::vector<vector<Ciphertext>> x_ciphers(num_party, vector<Ciphertext>(x_size));
     const int BATCH = 4096;

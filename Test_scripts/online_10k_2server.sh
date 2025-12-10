@@ -1,71 +1,76 @@
 #!/bin/bash
-# 文件路径: /workspace/lyl/SMASH/run_lvt_experiment.sh
-
 BASE_DIR="/workspace/lyl/SMASH"
 BIN_DIR="$BASE_DIR/bin"
 RESULTS_DIR="$BASE_DIR/Results"
-OUTPUT_FILE="$RESULTS_DIR/online_10k_2server.txt"
 IP_FILE="$BASE_DIR/config/parties8.txt"
 
-# 创建结果目录
-mkdir -p "$RESULTS_DIR"
-echo "n condition avg_time(s) avg_comm(MB)" > "$OUTPUT_FILE"
+NET="wan"       
+TOTAL_PARTIES=6
+START_ID=4    
+END_ID=6
 
-# 定义参与方数和网络条件
-NS=(8)
-NETS=("local" "lan" "wan")
+mkdir -p "$RESULTS_DIR/logs"
 
-# 遍历每种n和网络条件
-for n in "${NS[@]}"; do
-    for net in "${NETS[@]}"; do
-        echo "Running n=$n, network=$net ..."
-        
-        TIMES=()
-        COMMS=()
+echo "=== Current machine launching parties $START_ID to $END_ID ==="
 
-        # 启动n个进程，使用端口从2222开始递增
-        PIDS=()
-        TMP_FILES=()
-        for ((i=n/2-1;i<=n;i++)); do
-            TMP_FILE=$(mktemp)
-            TMP_FILES+=("$TMP_FILE")
-            "$BIN_DIR/test_lvt_online" "$i" 0 "$n" "$net" "$IP_FILE" > "$TMP_FILE" 2>&1 &
-            PIDS+=($!)
-        done
+PIDS=()
+for ((i=START_ID;i<=END_ID;i++)); do
+    LOG_FILE="$RESULTS_DIR/logs/party_${i}.log"
+    target_ip=$(awk "NR==$i {print \$1}" "$IP_FILE")
 
-        # 等待所有进程完成
-        for pid in "${PIDS[@]}"; do
-            wait $pid
-        done
+    echo "[Current machine] Launching Party $i -> $target_ip"
+    ping -c 1 -W 1 "$target_ip" >/dev/null || echo "[Current machine] WARNING: Party $i target unreachable!"
 
-        # 提取每个进程的时间和通信
-        for tmpf in "${TMP_FILES[@]}"; do
-            # 匹配 "Online time: 1.12127 s, comm: 2.28884 MB"
-            line=$(grep "Online time" "$tmpf")
-            if [[ $line =~ Online\ time:\ ([0-9.]+)\ s,\ comm:\ ([0-9.]+)\ MB ]]; then
-                TIMES+=("${BASH_REMATCH[1]}")
-                COMMS+=("${BASH_REMATCH[2]}")
-            fi
-            rm -f "$tmpf"
-        done
+    timeout 100 "$BIN_DIR/test_lvt_online" \
+        "$i" 0 "$TOTAL_PARTIES" "$NET" "$IP_FILE" \
+        > "$LOG_FILE" 2>&1 &
 
-        # 计算平均值
-        sum_time=0
-        sum_comm=0
-        for t in "${TIMES[@]}"; do
-            sum_time=$(awk "BEGIN {print $sum_time + $t}")
-        done
-        for c in "${COMMS[@]}"; do
-            sum_comm=$(awk "BEGIN {print $sum_comm + $c}")
-        done
-
-        avg_time=$(awk "BEGIN {print $sum_time / ${#TIMES[@]}}")
-        avg_comm=$(awk "BEGIN {print $sum_comm / ${#COMMS[@]}}")
-
-        # 写入结果文件
-        echo "$n $net $avg_time $avg_comm" >> "$OUTPUT_FILE"
-        echo "Done n=$n, network=$net -> avg_time=$avg_time s, avg_comm=$avg_comm MB"
-    done
+    PIDS+=($!)
 done
 
-echo "All experiments finished. Results saved to $OUTPUT_FILE"
+echo "[Current machine] Waiting for all local parties..."
+for pid in "${PIDS[@]}"; do
+    wait $pid
+done
+echo "[Current machine] All parties finished."
+
+SUMMARY_FILE="$RESULTS_DIR/online_10k_2server.txt"
+
+echo "party online_time(s) comm(MB)" > "$SUMMARY_FILE"
+
+sum_time=0
+sum_comm=0
+count=0
+
+for ((i=START_ID;i<=END_ID;i++)); do
+    LOG_FILE="$RESULTS_DIR/logs/party_${i}.log"
+
+    line=$(grep "Online time:" "$LOG_FILE")
+
+    if [[ $line =~ Online\ time:\ ([0-9.]+)\ s,\ comm:\ ([0-9.]+)\ MB ]]; then
+        t=${BASH_REMATCH[1]}
+        c=${BASH_REMATCH[2]}
+        echo "$i $t $c" >> "$SUMMARY_FILE"
+
+        sum_time=$(awk "BEGIN {print $sum_time + $t}")
+        sum_comm=$(awk "BEGIN {print $sum_comm + $c}")
+        count=$((count+1))
+    else
+        echo "$i ERROR ERROR" >> "$SUMMARY_FILE"
+    fi
+done
+
+if [[ $count -gt 0 ]]; then
+    avg_time=$(awk "BEGIN {print $sum_time / $count}")
+    avg_comm=$(awk "BEGIN {print $sum_comm / $count}")
+
+    echo "" >> "$SUMMARY_FILE"
+    echo "avg_time $avg_time" >> "$SUMMARY_FILE"
+    echo "avg_comm $avg_comm" >> "$SUMMARY_FILE"
+
+    echo "[Current machine] Summary written to: $SUMMARY_FILE"
+    echo "[Current machine] avg_time = $avg_time s"
+    echo "[Current machine] avg_comm = $avg_comm MB"
+else
+    echo "[Current machine] No valid logs found!"
+fi
