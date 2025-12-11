@@ -3,9 +3,7 @@
 #include <memory>
 #include <sys/resource.h>
 #include <unistd.h>
-
 using namespace emp;
-
 int party, port;
 const static int threads = 32;
 int num_party;
@@ -22,30 +20,45 @@ int main(int argc, char** argv) {
     std::vector<std::pair<std::string, unsigned short>> net_config;
     if (argc >= 6) {
         const char* file = argv[5];
+        std::cout << "[DEBUG] Trying to open config file: " << file << std::endl;
         FILE* f = fopen(file, "r");
         if (f != nullptr) {
+            std::cout << "[DEBUG] Config file opened successfully." << std::endl;
             for (int i = 0; i < num_party; ++i) {
-                char* c = (char*)malloc(15 * sizeof(char));
+                char* c = (char*)malloc(128); // bigger buffer
                 uint p;
-                fscanf(f, "%s %u", c, &p);
-                net_config.push_back(std::make_pair(std::string(c), p));
-                fflush(f);
+                int ret = fscanf(f, "%127s %u", c, &p);
+                if (ret != 2) {
+                    std::cerr << "[ERROR] fscanf failed at line " << i
+                            << ", ret = " << ret << std::endl;
+                    free(c);
+                    fclose(f);
+                    exit(1);
+                }
+                net_config.emplace_back(std::string(c), (unsigned short)p);
+                free(c);
             }
+
             fclose(f);
         } else {
-            for (int i = 0; i < num_party; ++i) {
-                net_config.push_back({ "127.0.0.1", (unsigned short)(port + 4 * num_party * i) });
-            }
-        }
-        std::cout << "Try open config file: " << file << std::endl;
-        if (f == nullptr) {
-            std::cout << "FAILED TO OPEN CONFIG FILE" << std::endl;
-        }
-    } else {
-        for (int i = 0; i < num_party; ++i) {
-            net_config.push_back({ "127.0.0.1", (unsigned short)(port + 4 * num_party * i) });
+            std::cerr << "[ERROR] FAILED TO OPEN CONFIG FILE: " << file
+                    << ". Falling back to auto-generated localhost IPs.\n";
         }
     }
+    if ((int)net_config.size() != num_party) {
+        net_config.clear();
+        std::cout << "[INFO] No valid IP configuration provided. "
+                    "Auto-generating localhost IP list.\n";
+
+        for (int i = 0; i < num_party; ++i) {
+            unsigned short auto_port = (unsigned short)(port + i);
+            net_config.emplace_back("127.0.0.1", auto_port);
+
+            std::cout << "[INFO] Party " << (i+1)
+                    << " -> 127.0.0.1:" << auto_port << std::endl;
+        }
+    }
+    
     ThreadPool pool(threads);
     MultiIO* io = new MultiIO(party, num_party, net_config);
     ELGL<MultiIOBase>* elgl = new ELGL<MultiIOBase>(num_party, io, &pool, party);

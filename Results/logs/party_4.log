@@ -1,4 +1,3 @@
-dsafdgiudfgasfud
 [DEBUG] Trying to open config file: /workspace/lyl/SMASH/config/parties8.txt
 [DEBUG] Config file opened successfully.
 [DEBUG] Reading line 0 ...
@@ -14,8 +13,3 @@ dsafdgiudfgasfud
 [DEBUG] Reading line 5 ...
 [DEBUG] fscanf return = 2, read host = 172.31.215.190, port = 62180
 [DEBUG] Finished reading config file.
-Number of parties: 6
-Key Generation Done.
-Share Generation Done.
-Input size: 10000
-Online time: 4.92382 s, comm: 3.81474 MB

@@ -28,7 +28,7 @@ for n in "${NS[@]}"; do
         for ((i=1;i<=n;i++)); do
             TMP_FILE=$(mktemp)
             TMP_FILES+=("$TMP_FILE")
-            "$BIN_DIR/test_lvt_online" "$i" $((32947)) "$n" "$net" > "$TMP_FILE" 2>&1 &
+            "$BIN_DIR/test_lvt_online" "$i" $((31947)) "$n" "$net" > "$TMP_FILE" 2>&1 &
             PIDS+=($!)
         done
 
