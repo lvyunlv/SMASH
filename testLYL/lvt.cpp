@@ -76,7 +76,7 @@ int main(int argc, char** argv) {
     cout << "Offline time: " << time_ms << " s, comm: " << comm_kb << " MB" << std::endl;
     std::vector<Plaintext> x_share;
     std::string input_mode = (argc >= 7) ? argv[6] : "txt";
-    std::string input_file = "../Input/Input-P." + input_mode;
+    std::string input_file = "../../Input/Input-P." + input_mode;
     if (!fs::exists(input_file)) {
         std::cerr << "Error: input file does not exist: " << input_file << std::endl;
         return 1;

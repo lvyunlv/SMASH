@@ -71,7 +71,7 @@ int main(int argc, char** argv) {
     cout << "Share Generation Done." << endl;
     std::vector<Plaintext> x_share;
     std::string input_mode = (argc >= 7) ? argv[6] : "txt";
-    std::string input_file = "../Input/Input-P." + input_mode;
+    std::string input_file = "../../Input/Input-P." + input_mode;
     if (!fs::exists(input_file)) {
         std::cerr << "Error: input file does not exist: " << input_file << std::endl;
         return 1;

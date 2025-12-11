@@ -1,26 +1,53 @@
 #!/bin/bash
 
-BASE_DIR="/workspace/lyl/SMASH"
-BIN_DIR="$BASE_DIR/bin"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BASE_DIR="$(dirname "$SCRIPT_DIR")"
+BIN_DIR="$BASE_DIR/build/bin"
 RESULTS_DIR="$BASE_DIR/Results"
-OUTPUT_FILE="$RESULTS_DIR/total_1server.txt"
 INPUT_FILE="$BASE_DIR/Input/Input-P.txt"
+
 mkdir -p "$BASE_DIR/Input"
 mkdir -p "$RESULTS_DIR"
 
+OUTPUT_FILE="$RESULTS_DIR/total_1server.txt"
+
+read_line_safely() {
+    local file="$1"
+    local key="$2"
+    local line=""
+
+    for attempt in {1..40}; do
+        if [[ -f "$file" ]]; then
+            line=$(grep "$key" "$file")
+            if [[ -n "$line" ]]; then
+                echo "$line"
+                return 0
+            fi
+        fi
+        sleep 0.05
+    done
+
+    echo ""
+    return 1
+}
+
 echo "[Current machine] Generating random input file: $INPUT_FILE"
-echo "n condition avg_offline_time avg_offline_comm avg_online_time avg_online_comm" > "$OUTPUT_FILE"
 
-NS=(2 4 8 16 32)
-NETS=("local" "lan" "wan")
-
-: > "$INPUT_FILE"  
+: > "$INPUT_FILE"
 for ((k=1;k<=1;k++)); do
     echo $(( RANDOM % 11 )) >> "$INPUT_FILE"
 done
 
+echo "n condition avg_offline_time avg_offline_comm avg_online_time avg_online_comm" > "$OUTPUT_FILE"
+
+NS=(2 4 8 16 32)
+NETS=("local" "lan" "wan")
+BASE_PORT=20000
+
 for n in "${NS[@]}"; do
     for net in "${NETS[@]}"; do
+
+        PORT=$((BASE_PORT + RANDOM % 5000))
         echo "Running n=$n, network=$net ..."
 
         OFF_TIMES=()
@@ -35,7 +62,7 @@ for n in "${NS[@]}"; do
             TMP_FILE=$(mktemp)
             TMP_FILES+=("$TMP_FILE")
 
-            "$BIN_DIR/test_lvt" "$i" 31947 "$n" "$net" > "$TMP_FILE" 2>&1 &
+            "$BIN_DIR/test_lvt" "$i" "$PORT" "$n" "$net" > "$TMP_FILE" 2>&1 &
             PIDS+=($!)
         done
 
@@ -44,19 +71,50 @@ for n in "${NS[@]}"; do
         done
 
         for tmpf in "${TMP_FILES[@]}"; do
-            offline_line=$(grep "Offline time" "$tmpf")
-            online_line=$(grep "Online time" "$tmpf")
 
-            # Offline
-            if [[ $offline_line =~ Offline\ time:\ ([0-9.]+)\ s,\ comm:\ ([0-9.]+)\ MB ]]; then
-                OFF_TIMES+=("${BASH_REMATCH[1]}")
-                OFF_COMMS+=("${BASH_REMATCH[2]}")
+            offline_line=$(read_line_safely "$tmpf" "Offline time")
+            online_line=$(read_line_safely "$tmpf" "Online time")
+
+            offline_time=$(echo "$offline_line" | awk '
+                /Offline[[:space:]]+time/ {
+                    for(i=1;i<=NF;i++){
+                        if($i=="time:") print $(i+1)
+                    }
+                }')
+            offline_comm=$(echo "$offline_line" | awk '
+                /Offline[[:space:]]+time/ {
+                    for(i=1;i<=NF;i++){
+                        if($i=="comm:") print $(i+1)
+                    }
+                }')
+
+            offline_time=$(echo "$offline_time" | sed -E 's/[^0-9eE+.-]//g')
+            offline_comm=$(echo "$offline_comm" | sed -E 's/[^0-9eE+.-]//g')
+
+            online_time=$(echo "$online_line" | awk '
+                /Online[[:space:]]+time/ {
+                    for(i=1;i<=NF;i++){
+                        if($i=="time:") print $(i+1)
+                    }
+                }')
+            online_comm=$(echo "$online_line" | awk '
+                /Online[[:space:]]+time/ {
+                    for(i=1;i<=NF;i++){
+                        if($i=="comm:") print $(i+1)
+                    }
+                }')
+
+            online_time=$(echo "$online_time" | sed -E 's/[^0-9eE+.-]//g')
+            online_comm=$(echo "$online_comm" | sed -E 's/[^0-9eE+.-]//g')
+
+            if [[ -n "$offline_time" && -n "$offline_comm" ]]; then
+                OFF_TIMES+=("$offline_time")
+                OFF_COMMS+=("$offline_comm")
             fi
 
-            # Online
-            if [[ $online_line =~ Online\ time:\ ([0-9.]+)\ s,\ comm:\ ([0-9.]+)\ MB ]]; then
-                ON_TIMES+=("${BASH_REMATCH[1]}")
-                ON_COMMS+=("${BASH_REMATCH[2]}")
+            if [[ -n "$online_time" && -n "$online_comm" ]]; then
+                ON_TIMES+=("$online_time")
+                ON_COMMS+=("$online_comm")
             fi
 
             rm -f "$tmpf"
@@ -68,22 +126,22 @@ for n in "${NS[@]}"; do
         sum_on_comm=0
 
         for t in "${OFF_TIMES[@]}"; do
-            sum_off_time=$(awk "BEGIN {print $sum_off_time + $t}")
+            sum_off_time=$(awk -v a="$sum_off_time" -v b="$t" 'BEGIN {print a+b}')
         done
         for c in "${OFF_COMMS[@]}"; do
-            sum_off_comm=$(awk "BEGIN {print $sum_off_comm + $c}")
+            sum_off_comm=$(awk -v a="$sum_off_comm" -v b="$c" 'BEGIN {print a+b}')
         done
         for t in "${ON_TIMES[@]}"; do
-            sum_on_time=$(awk "BEGIN {print $sum_on_time + $t}")
+            sum_on_time=$(awk -v a="$sum_on_time" -v b="$t" 'BEGIN {print a+b}')
         done
         for c in "${ON_COMMS[@]}"; do
-            sum_on_comm=$(awk "BEGIN {print $sum_on_comm + $c}")
+            sum_on_comm=$(awk -v a="$sum_on_comm" -v b="$c" 'BEGIN {print a+b}')
         done
 
-        avg_off_time=$(awk "BEGIN {print $sum_off_time / ${#OFF_TIMES[@]}}")
-        avg_off_comm=$(awk "BEGIN {print $sum_off_comm / ${#OFF_COMMS[@]}}")
-        avg_on_time=$(awk "BEGIN {print $sum_on_time / ${#ON_TIMES[@]}}")
-        avg_on_comm=$(awk "BEGIN {print $sum_on_comm / ${#ON_COMMS[@]}}")
+        avg_off_time=$(awk -v s="$sum_off_time" -v c="${#OFF_TIMES[@]}" 'BEGIN {print s/c}')
+        avg_off_comm=$(awk -v s="$sum_off_comm" -v c="${#OFF_COMMS[@]}" 'BEGIN {print s/c}')
+        avg_on_time=$(awk -v s="$sum_on_time" -v c="${#ON_TIMES[@]}" 'BEGIN {print s/c}')
+        avg_on_comm=$(awk -v s="$sum_on_comm" -v c="${#ON_COMMS[@]}" 'BEGIN {print s/c}')
 
         echo "$n $net $avg_off_time $avg_off_comm $avg_on_time $avg_on_comm" >> "$OUTPUT_FILE"
 

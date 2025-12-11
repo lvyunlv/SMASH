@@ -123,6 +123,7 @@ class LVT{
     void generate_shares_fake(vector<Plaintext>& lut_share, Plaintext& rotation, vector<int64_t> table);
     tuple<Plaintext, vector<Ciphertext>> lookup_online(Plaintext& x_share, vector<Ciphertext>& x_cipher);
     tuple<vector<Plaintext>, vector<vector<Ciphertext>>> lookup_online_batch(vector<Plaintext>& x_share, vector<vector<Ciphertext>>& x_cipher); 
+    vector<Plaintext> lookup_online_batch_(vector<Plaintext>& x_share);
     void save_full_state(const std::string& filename);
     void load_full_state(const std::string& filename);
     Plaintext Reconstruct(Plaintext input, vector<Ciphertext> input_cips, ELGL<IO>* elgl, const ELGL_PK& global_pk, const std::vector<ELGL_PK>& user_pks, MPIOChannel<IO>* io, ThreadPool* pool, int party, int num_party, mcl::Vint modulo);
@@ -1366,7 +1367,83 @@ tuple<vector<Plaintext>, vector<vector<Ciphertext>>> LVT<IO>::lookup_online_batc
 }
 
 
+template <typename IO>
+vector<Plaintext> LVT<IO>::lookup_online_batch_(vector<Plaintext>& x_share){
+    size_t x_size = x_share.size();
+    vector<Plaintext> out(x_size);
+    vector<Plaintext> uu(x_size);
+    if (x_size == 0) return out;
+    size_t tnum = std::max<size_t>(1, thread_num);
+    size_t block_size = (x_size + tnum - 1) / tnum;
+    if (block_size == 0) block_size = 1;
+    {
+        vector<future<void>> futs;
+        for (size_t b = 0; b < x_size; b += block_size) {
+            size_t bstart = b;
+            size_t bend = std::min(x_size, b + block_size);
 
+            futs.push_back(pool->enqueue([this, bstart, bend, &x_share, &uu]() {
+                for (size_t i = bstart; i < bend; ++i)
+                    uu[i] = x_share[i] + this->rotation;
+            }));
+        }
+        for (auto &f : futs) f.get();
+    }
+    std::stringstream send_ss;
+    for (size_t i = 0; i < x_size; ++i)
+        uu[i].pack(send_ss);
+    elgl->serialize_sendall_(send_ss);
+    vector<future<vector<Plaintext>>> recv_futs;
+    recv_futs.reserve(num_party - 1);
+    for (int p = 1; p <= num_party; ++p) {
+        if (p == party) continue;
+        recv_futs.push_back(pool->enqueue([this, p, x_size]() -> vector<Plaintext> {
+            std::stringstream recv_ss;
+            elgl->deserialize_recv_(recv_ss, p);
+            vector<Plaintext> tmp(x_size);
+            for (size_t j = 0; j < x_size; ++j)
+                tmp[j].unpack(recv_ss);
+            return tmp;
+        }));
+    }
+    vector<vector<Plaintext>> recv_results;
+    for (auto &f : recv_futs)
+        recv_results.push_back(f.get());
+    for (auto &tmp_vec : recv_results) {
+        vector<future<void>> futs;
+        for (size_t b = 0; b < x_size; b += block_size) {
+            size_t bstart = b;
+            size_t bend = std::min(x_size, b + block_size);
+
+            futs.push_back(pool->enqueue([bstart, bend, &uu, &tmp_vec]() {
+                for (size_t j = bstart; j < bend; ++j)
+                    uu[j] += tmp_vec[j];
+            }));
+        }
+        for (auto &f : futs) f.get();
+    }
+    {
+        mcl::Vint tbs; tbs.setStr(to_string(su));
+        vector<future<void>> futs;
+
+        for (size_t b = 0; b < x_size; b += block_size) {
+            size_t bstart = b;
+            size_t bend = std::min(x_size, b + block_size);
+
+            futs.push_back(pool->enqueue([this, bstart, bend, &uu, &out, &tbs]() {
+                for (size_t i = bstart; i < bend; ++i) {
+                    mcl::Vint u_mpz = uu[i].get_message().getMpz();
+                    mcl::gmp::mod(u_mpz, u_mpz, tbs);
+
+                    size_t index = static_cast<size_t>(u_mpz.getLow32bit());
+                    out[i] = this->lut_share[index];
+                }
+            }));
+        }
+        for (auto &f : futs) f.get();
+    }
+    return out;
+}
 
 template <typename IO>
 Plaintext LVT<IO>::Reconstruct(Plaintext input, vector<Ciphertext> input_cips, ELGL<IO>* elgl, const ELGL_PK& global_pk, const std::vector<ELGL_PK>& user_pks, MPIOChannel<IO>* io, ThreadPool* pool, int party, int num_party, mcl::Vint modulo){

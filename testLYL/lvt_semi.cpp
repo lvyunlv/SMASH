@@ -3,6 +3,7 @@
 #include <memory>
 #include <sys/resource.h>
 #include <unistd.h>
+#include <filesystem>
 
 using namespace emp;
 
@@ -63,7 +64,7 @@ int main(int argc, char** argv) {
     size_t initial_memory = get_current_memory_usage();
     lvt->DistKeyGen(1);lvt->generate_shares_(lvt->lut_share, lvt->rotation, lvt->table);
     std::vector<Plaintext> x_share;
-    std::string input_file = "../Input/Input-P.txt";
+    std::string input_file = "../../Input/Input-P.txt";
     {
         if (!fs::exists(input_file)) {
             std::cerr << "Error: input file does not exist: " << input_file << std::endl;

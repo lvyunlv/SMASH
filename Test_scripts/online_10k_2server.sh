@@ -1,43 +1,69 @@
 #!/bin/bash
-BASE_DIR="/workspace/lyl/SMASH"
-BIN_DIR="$BASE_DIR/bin"
+
+BASE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+BIN_DIR="$BASE_DIR/build/bin"
 RESULTS_DIR="$BASE_DIR/Results"
-INPUT_FILE="$BASE_DIR/Input/Input-P.txt"
-IP_FILE="$BASE_DIR/config/parties8.txt"
+INPUT_DIR="$BASE_DIR/Input"
+CONFIG_DIR="$BASE_DIR/config"
+
+INPUT_FILE="$INPUT_DIR/Input-P.txt"
+IP_FILE="$CONFIG_DIR/parties8.txt"
 SUMMARY_FILE="$RESULTS_DIR/online_10k_2server.txt"
 
-NET="wan"    # local/lan/wan
+NET="wan"
 TOTAL_PARTIES=6
-START_ID=4    
+START_ID=4
 END_ID=6
 
 mkdir -p "$RESULTS_DIR/logs"
+mkdir -p "$INPUT_DIR"
+
 echo "=== Current machine launching parties $START_ID to $END_ID ==="
-mkdir -p "$BASE_DIR/Input"
 echo "[Current machine] Generating random input file: $INPUT_FILE"
 
-: > "$INPUT_FILE" 
+: > "$INPUT_FILE"
 for ((k=1;k<=10000;k++)); do
     echo $(( RANDOM % 11 )) >> "$INPUT_FILE"
 done
+
 PIDS=()
+
 for ((i=START_ID;i<=END_ID;i++)); do
     LOG_FILE="$RESULTS_DIR/logs/party_${i}.log"
-    target_ip=$(awk "NR==$i {print \$1}" "$IP_FILE")
 
-    echo "[Current machine] Launching Party $i -> $target_ip"
-    ping -c 1 -W 1 "$target_ip" >/dev/null || echo "[Current machine] WARNING: Party $i target unreachable!"
+    time_val=$(awk '
+        /Online[[:space:]]+time/ {
+            for(i=1;i<=NF;i++){
+                if($i=="time:") print $(i+1);
+            }
+        }' "$LOG_FILE")
 
-    timeout 100 "$BIN_DIR/test_lvt_online" \
-        "$i" 0 "$TOTAL_PARTIES" "$NET" "$IP_FILE" \
-        > "$LOG_FILE" 2>&1 &
+    comm_val=$(awk '
+        /Online[[:space:]]+time/ {
+            for(i=1;i<=NF;i++){
+                if($i=="comm:") print $(i+1);
+            }
+        }' "$LOG_FILE")
 
-    PIDS+=($!)
+    time_val=$(echo "$time_val" | sed -E 's/[^0-9eE+.-]//g')
+    comm_val=$(echo "$comm_val" | sed -E 's/[^0-9eE+.-]//g')
+
+    if [[ -n "$time_val" && -n "$comm_val" ]]; then
+        echo "$i $time_val $comm_val" >> "$SUMMARY_FILE"
+
+        sum_time=$(awk -v a="$sum_time" -v b="$time_val" 'BEGIN {printf "%.10f", a+b}')
+        sum_comm=$(awk -v a="$sum_comm" -v b="$comm_val" 'BEGIN {printf "%.10f", a+b}')
+
+        count=$((count+1))
+    else
+        echo "$i ERROR ERROR" >> "$SUMMARY_FILE"
+    fi
 done
+
 
 echo "[Current machine] Waiting for all local parties..."
 for pid in "${PIDS[@]}"; do
-    wait $pid
+    wait "$pid"
 done
 echo "[Current machine] All parties finished."
 
@@ -49,16 +75,17 @@ count=0
 
 for ((i=START_ID;i<=END_ID;i++)); do
     LOG_FILE="$RESULTS_DIR/logs/party_${i}.log"
-
     line=$(grep "Online time:" "$LOG_FILE")
 
     if [[ $line =~ Online\ time:\ ([0-9.]+)\ s,\ comm:\ ([0-9.]+)\ MB ]]; then
         t=${BASH_REMATCH[1]}
         c=${BASH_REMATCH[2]}
+
         echo "$i $t $c" >> "$SUMMARY_FILE"
 
-        sum_time=$(awk "BEGIN {print $sum_time + $t}")
-        sum_comm=$(awk "BEGIN {print $sum_comm + $c}")
+        sum_time=$(awk -v a="$sum_time" -v b="$t" 'BEGIN {printf "%.10f", a+b}')
+        sum_comm=$(awk -v a="$sum_comm" -v b="$c" 'BEGIN {printf "%.10f", a+b}')
+
         count=$((count+1))
     else
         echo "$i ERROR ERROR" >> "$SUMMARY_FILE"
@@ -66,8 +93,8 @@ for ((i=START_ID;i<=END_ID;i++)); do
 done
 
 if [[ $count -gt 0 ]]; then
-    avg_time=$(awk "BEGIN {print $sum_time / $count}")
-    avg_comm=$(awk "BEGIN {print $sum_comm / $count}")
+    avg_time=$(awk -v s="$sum_time" -v c="$count" 'BEGIN {printf "%.10f", s/c}')
+    avg_comm=$(awk -v s="$sum_comm" -v c="$count" 'BEGIN {printf "%.10f", s/c}')
 
     echo "" >> "$SUMMARY_FILE"
     echo "avg_time $avg_time" >> "$SUMMARY_FILE"
