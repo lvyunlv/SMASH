@@ -53,7 +53,7 @@ for ((i=START_ID;i<=END_ID;i++)); do
     ping -c 1 -W 1 "$target_ip" >/dev/null || \
         echo "[Current machine] WARNING: Party $i unreachable!"
 
-    timeout 300 "$BIN_DIR/test_lvt_online" \
+    timeout 300 "$BIN_DIR/test_lvt" \
         "$i" 0 "$TOTAL_PARTIES" "$NET" "$IP_FILE" \
         > "$LOG_FILE" 2>&1 &
 

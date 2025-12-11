@@ -1,0 +1,9 @@
+party offline_time(s) offline_comm(MB) online_time(s) online_comm(MB)
+4 18.7003 4.48106 0.201437 0.000424385
+5 18.6146 4.48106 0.201496 0.000424385
+6 18.6853 4.48106 0.201498 0.000424385
+
+avg_offline_time 18.6667
+avg_offline_comm 4.48107
+avg_online_time 0.201477
+avg_online_comm 0.000424383
