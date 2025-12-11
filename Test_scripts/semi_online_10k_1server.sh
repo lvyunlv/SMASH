@@ -3,7 +3,7 @@
 BASE_DIR="/workspace/lyl/SMASH"
 BIN_DIR="$BASE_DIR/bin"
 RESULTS_DIR="$BASE_DIR/Results"
-OUTPUT_FILE="$RESULTS_DIR/online_10k_1server.txt"
+OUTPUT_FILE="$RESULTS_DIR/semi_online_10k_1server.txt"
 INPUT_FILE="$BASE_DIR/Input/Input-P.txt"
 mkdir -p "$BASE_DIR/Input"
 mkdir -p "$RESULTS_DIR"
@@ -29,7 +29,7 @@ for n in "${NS[@]}"; do
         for ((i=1;i<=n;i++)); do
             TMP_FILE=$(mktemp)
             TMP_FILES+=("$TMP_FILE")
-            "$BIN_DIR/test_lvt_online" "$i" $((31947)) "$n" "$net" > "$TMP_FILE" 2>&1 &
+            "$BIN_DIR/test_lvt_semi" "$i" $((31947)) "$n" "$net" > "$TMP_FILE" 2>&1 &
             PIDS+=($!)
         done
 

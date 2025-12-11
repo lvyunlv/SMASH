@@ -58,17 +58,10 @@ int main(int argc, char** argv) {
     ThreadPool pool(threads);
     MultiIO* io = new MultiIO(party, num_party, net_config);
     ELGL<MultiIOBase>* elgl = new ELGL<MultiIOBase>(num_party, io, &pool, party); 
-    std::string tablefile = "init"; int aln = 20; int tb_size = 1ULL << aln; Fr alpha_fr = alpha_init(aln);
+    std::string tablefile = "init"; int aln = 8; int su = 1ULL << aln; Fr alpha_fr = alpha_init(aln);
     emp::LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party, party, io, &pool, elgl, tablefile, alpha_fr, aln, aln);
     size_t initial_memory = get_current_memory_usage();
-    lvt->DistKeyGen(1);
-    int bytes_start = io->get_total_bytes_sent();
-    auto t1 = std::chrono::high_resolution_clock::now();
-    lvt->generate_shares_(lvt->lut_share, lvt->rotation, lvt->table);
-    int bytes_end = io->get_total_bytes_sent();
-    auto t2 = std::chrono::high_resolution_clock::now();
-    float comm_kb = float(bytes_end - bytes_start) / 1024.0 / 1024.0;
-    float time_ms = std::chrono::duration<float, std::milli>(t2 - t1).count() / 1000.0;
+    lvt->DistKeyGen(1);lvt->generate_shares_(lvt->lut_share, lvt->rotation, lvt->table);
     std::vector<Plaintext> x_share;
     std::string input_file = "../Input/Input-P.txt";
     {
@@ -84,7 +77,7 @@ int main(int argc, char** argv) {
             x_share.push_back(x);
             if (x.get_message().getUint64() > (1ULL << aln) - 1) {
                 std::cerr << "Error: input value exceeds table size in Party: " << party << std::endl;
-                cout << "Error value: " << x.get_message().getUint64() << ", tb_size = " << (1ULL << aln) << endl;
+                cout << "Error value: " << x.get_message().getUint64() << ", su = " << (1ULL << aln) << endl;
                 return 1;
             }
         }
@@ -102,7 +95,7 @@ int main(int argc, char** argv) {
             }
         }
     }
-    Plaintext tb_field = Plaintext(tb_size);
+    Plaintext tb_field = Plaintext(su);
     vector<Plaintext> x_sums(x_size);
     std::vector<std::future<void>> futs;
     futs.reserve(x_size);

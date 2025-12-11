@@ -4,7 +4,7 @@ BIN_DIR="$BASE_DIR/bin"
 RESULTS_DIR="$BASE_DIR/Results"
 INPUT_FILE="$BASE_DIR/Input/Input-P.txt"
 IP_FILE="$BASE_DIR/config/parties8.txt"
-SUMMARY_FILE="$RESULTS_DIR/online_10k_2server.txt"
+SUMMARY_FILE="$RESULTS_DIR/semi_online_10k_2server.txt"
 
 NET="wan"    # local/lan/wan
 TOTAL_PARTIES=6
@@ -28,7 +28,7 @@ for ((i=START_ID;i<=END_ID;i++)); do
     echo "[Current machine] Launching Party $i -> $target_ip"
     ping -c 1 -W 1 "$target_ip" >/dev/null || echo "[Current machine] WARNING: Party $i target unreachable!"
 
-    timeout 100 "$BIN_DIR/test_lvt_online" \
+    timeout 100 "$BIN_DIR/test_lvt_semi" \
         "$i" 0 "$TOTAL_PARTIES" "$NET" "$IP_FILE" \
         > "$LOG_FILE" 2>&1 &
 
