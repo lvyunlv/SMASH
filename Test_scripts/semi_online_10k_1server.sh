@@ -16,13 +16,11 @@ echo "[Current machine] Generating random input file: $INPUT_FILE"
 NS=(2 4 8 16 32)
 NETS=("local" "lan" "wan")
 
-# ======== 生成输入文件 ========
 : > "$INPUT_FILE"
 for ((k=1;k<=10000;k++)); do
     echo $(( RANDOM % 11 )) >> "$INPUT_FILE"
 done
 
-# ======== 安全读取函数 ========
 read_online_line() {
     local file="$1"
     local line=""

@@ -38,7 +38,7 @@ for n in "${NS[@]}"; do
         for ((i=1;i<=n;i++)); do
             LOG_FILE="$LOG_DIR/online_n${n}_net${net}_party${i}.log"
 
-            stdbuf -o0 "$BIN_DIR/test_lvt_online" "$i" "$PORT" "$n" "$net" > "$LOG_FILE" 2>&1 &
+            "$BIN_DIR/test_lvt_online" "$i" "$PORT" "$n" "$net" > "$LOG_FILE" 2>&1 &
 
             PIDS+=($!)
         done

@@ -3,7 +3,6 @@
 #include <memory>
 #include <sys/resource.h>
 #include <unistd.h>
-#include <filesystem>
 
 using namespace emp;
 

@@ -25,7 +25,6 @@ for ((k=1;k<=10000;k++)); do
     echo $(( RANDOM % 11 )) >> "$INPUT_FILE"
 done
 
-# ======== 安全读取函数 ========
 read_online_line() {
     local file="$1"
     local line=""
