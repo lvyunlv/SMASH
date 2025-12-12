@@ -6,16 +6,16 @@
 using namespace std;
 
 int main(int argc, char** argv) {
-    if (argc < 2) {
-        std::cout << "please input a number" << std::endl;
-        return 0;
-    }
-    int num = std::stoi(argv[1]);
+    // if (argc < 2) {
+    //     std::cout << "please input a number" << std::endl;
+    //     return 0;
+    // }
+    // int num = std::stoi(argv[1]);
     BLS12381Element::init();
     vector<int64_t> table;
-    table.resize(1<<num);
+    table.resize(1<<1);
     Plaintext p;
-    for (size_t i = 0; i < table.size(); i++){
+    for (size_t i = 0; i < 2; i++){
         table[i] = i;
     }
     serializeTable(table, "table_2.txt", table.size());

@@ -1,9 +1,0 @@
-=== local Network Test Results ===
-Date: Wed 06 Aug 2025 11:30:17 AM CST
-Environment: local
-Number of Parties: 2
-
---- Party 1 Log ---
-
---- Party 2 Log ---
-

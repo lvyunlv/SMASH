@@ -27,21 +27,14 @@ int op = 1;
 int main(int argc, char** argv) {
     BLS12381Element::init();
     if (argc < 5) {
-        std::cout << "Usage: <PartyID> <port> <num_parties> <network_condition> [ip_config_file]" << std::endl;
+        std::cout << "Usage: <PartyID> <port> <num_parties> <nwc> [ip_config_file]" << std::endl;
         return 0;
     }
-
     parse_party_and_port(argv, &party, &port);
     num_party = std::stoi(argv[3]);
-    std::string network_condition = argv[4];
-
-    bool is_wan = (network_condition == "wan");
-    std::string effective_network_condition = is_wan ? "lan" : network_condition;
-
-    initialize_network_conditions(effective_network_condition);
-
+    std::string nwc = argv[4];
     std::vector<std::pair<std::string, unsigned short>> net_config;
-    if (argc >= 6 && !is_wan) {
+    if (argc >= 6) {
         const char* file = argv[5];
         FILE* f = fopen(file, "r");
         if (f != nullptr) {
@@ -67,11 +60,9 @@ int main(int argc, char** argv) {
             net_config.push_back({"127.0.0.1", static_cast<unsigned short>(port + 4*num_party*i)});
         }
     }
-
     ThreadPool pool(threads);
     MultiIO* io = new MultiIO(party, num_party, net_config);
     ELGL<MultiIOBase>* elgl = new ELGL<MultiIOBase>(num_party, io, &pool, party);
-
     Fr alpha_fr = alpha_init(op);
     std::string tablefile = "2";
     emp::LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party, party, io, &pool, elgl, tablefile, alpha_fr, op, kl);
@@ -82,19 +73,14 @@ int main(int argc, char** argv) {
     mcl::Vint x_mascot;
     x_mascot.setRand(FIELD_SIZE); 
     MASCOT<MultiIOBase>::LabeledShare x_arith = mascot.distributed_share(x_mascot);
-
-    double total_time = 0;
-    double total_comm = 0;
-    double online_time = 0;
-    double online_comm = 0;
+    nt(nwc); double total_time = 0, total_comm = 0, online_time = 0, online_comm = 0;
     int times = 1;
     for (int i = 0; i < times; ++i) {
-        auto x_bool = A2B_mascot::A2B(elgl, lvt, tiny, mascot, party, num_party, io, &pool, FIELD_SIZE, su, x_arith, online_time, online_comm, is_wan);
+        auto x_bool = A2B_mascot::A2B(elgl, lvt, tiny, mascot, party, num_party, nwc, io, &pool, FIELD_SIZE, su, x_arith, online_time, online_comm);
         total_time += online_time;
         total_comm += online_comm;
     }
-    std::cout << "Average time: " << (total_time/times) << "ms && Average communication: " << (total_comm/times) << "KB" << std::endl;
-
+    // std::cout << "Average time: " << (total_time/times) << "ms && Average communication: " << (total_comm/times) << "KB" << std::endl;
     delete lvt;
     delete elgl;
     delete io;

@@ -1,9 +1,0 @@
-=== wan Network Test Results ===
-Date: Wed 06 Aug 2025 11:56:42 AM CST
-Environment: wan
-Number of Parties: 2
-
---- Party 1 Log ---
-
---- Party 2 Log ---
-

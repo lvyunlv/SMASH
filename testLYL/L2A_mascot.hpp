@@ -30,8 +30,7 @@ inline MASCOT<MultiIOBase>::LabeledShare L2A(
     const vector<Ciphertext>& vec_cx,
     const mcl::Vint& fd,
     double& online_time,
-    double& online_comm,
-    bool is
+    double& online_comm
 ) {
     int bytes = io->get_total_bytes_sent();
     auto t = std::chrono::high_resolution_clock::now();
@@ -56,7 +55,6 @@ inline MASCOT<MultiIOBase>::LabeledShare L2A(
     Ciphertext cr, count;
     cr = lvt->global_pk.encrypt(r);
     elgl->serialize_sendall(cr);
-
     vector<Ciphertext> vec_cr(num_party);
     vec_cr[party - 1] = cr;
     for(int i = 1; i <= num_party; i++) {
@@ -66,21 +64,16 @@ inline MASCOT<MultiIOBase>::LabeledShare L2A(
             vec_cr[i - 1] = cr_i;
         }
     }
-
     count = cr;
     for(int i = 1; i <= num_party; i++) {
         if(i != party) {
             count += vec_cr[i - 1];
         }
     }
-
     auto tt = std::chrono::high_resolution_clock::now();
     int bytes_ = io->get_total_bytes_sent();
     double comm_kb1 = double(bytes_ - bytes) / 1024.0;
     double time_ms1 = std::chrono::duration<double, std::milli>(tt - t).count();
-    if (is) {std::random_device rd; std::mt19937 gen(rd());
-    std::uniform_real_distribution<double> delay_dist(0.6, 1.0);
-    time_ms1 += delay_dist(gen) * 1000.0;}
     std::cout << std::fixed << std::setprecision(6)
               << "Offline Communication: " << comm_kb1 << " KB, "
               << "Offline Time: " << time_ms1 << " ms" << std::endl;
@@ -95,10 +88,7 @@ inline MASCOT<MultiIOBase>::LabeledShare L2A(
         }
     }
     BLS12381Element u = thdcp_<MultiIOBase>(count, elgl, lvt->global_pk, lvt->user_pk, io, pool, party, num_party, lvt->P_to_m, lvt);
-    // BLS12381Element u = thdcp_<MultiIOBase>(count, elgl, lvt->global_pk, lvt->user_pk, io, pool, party, num_party, lvt->P_to_m, lvt);
-    // Fr u = thdcp(count, elgl, lvt->global_pk, lvt->user_pk, io, pool, party, num_party, lvt->P_to_m, lvt);
     mcl::Vint u_int;
-    // u_int.setStr(u.getStr());
     MASCOT<MultiIOBase>::LabeledShare shared_u;
     shared_u = mascot.add(shared_x, shared_r);
     u_int = mascot.reconstruct(shared_u);
@@ -115,9 +105,6 @@ inline MASCOT<MultiIOBase>::LabeledShare L2A(
             int bytes_end = io->get_total_bytes_sent();
             double comm_kb = double(bytes_end - bytes_start) / 1024.0;
             double time_ms = std::chrono::duration<double, std::milli>(t2 - t1).count();
-            if (is) {std::random_device rd; std::mt19937 gen(rd());
-            std::uniform_real_distribution<double> delay_dist(0.6, 1.0);
-            time_ms += delay_dist(gen) * 1000.0;}
             std::cout << std::fixed << std::setprecision(6)
                       << "Online Communication: " << comm_kb << " KB, "
                       << "Online Time: " << time_ms << " ms" << std::endl;
@@ -202,10 +189,7 @@ inline MASCOT<MultiIOBase>::LabeledShare L2A_for_B2A(
         }
     }
     BLS12381Element u = thdcp_<MultiIOBase>(count, elgl, lvt->global_pk, lvt->user_pk, io, pool, party, num_party, lvt->P_to_m, lvt);
-    // BLS12381Element u = thdcp_<MultiIOBase>(count, elgl, lvt->global_pk, lvt->user_pk, io, pool, party, num_party, lvt->P_to_m, lvt);
-    // Fr u = thdcp(count, elgl, lvt->global_pk, lvt->user_pk, io, pool, party, num_party, lvt->P_to_m, lvt);
     mcl::Vint u_int;
-    // u_int.setStr(u.getStr());
     MASCOT<MultiIOBase>::LabeledShare shared_u;
     shared_u = mascot.add(shared_x, shared_r);
     u_int = mascot.reconstruct(shared_u);
