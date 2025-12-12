@@ -13,7 +13,7 @@ Makefile
 cmake_install.cmake
 install_manifest.txt
 lib/libmcl.so*
-Results/
+# Results/
 # Compiled Object files
 *.slo
 *.lo
