@@ -493,7 +493,6 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
         s.resize(len);
         ss.read(&s[0], len);
     };
-    
     if (party == ALICE) {
         std::stringstream comm, response, encMap;
         elgl->DecProof(global_pk, comm, response, encMap, this->table, su, c0, c1, pool);
@@ -626,7 +625,8 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
                     }
                     res_.clear();
                     std::stringstream commit_ro, response_ro;
-                    Rot_prover.NIZKPoK(rot_proof, commit_ro, response_ro, global_pk, global_pk, dk_, ek_, dk_thread, ek_thread, beta, sk, pool);
+                    Rot_prover.NIZKPoK(rot_proof, commit_ro, response_ro, 
+                    global_pk, global_pk, dk_, ek_, dk_thread, ek_thread, beta, sk, pool);
                     std::stringstream comm_ro_final, response_ro_final; 
                     std::string comm_raw_final, response_raw_final;
                     comm_raw_final = commit_ro.str();
@@ -656,7 +656,8 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
         response_raw = response_ro.str();
         comm_ << base64_decode(comm_raw);
         response_ << base64_decode(response_raw);
-        Rot_verifier.NIZKPoK(dk, ek, ak, bk, comm_, response_, global_pk, global_pk, pool);
+        Rot_verifier.NIZKPoK(dk, ek, ak, bk, comm_, 
+        response_, global_pk, global_pk, pool);
     }
     Plaintext alpha_inv;
     Fr alpha_inv_;
@@ -746,12 +747,12 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
                 Fr y; 
                 if(flag) {
                     auto it = this->P_to_m.find(Y.getPoint().getStr());
-                    if (it == this->P_to_m.end()) {
-                        std::cerr << "[Error] y not found in P_to_m! y = " << Y.getPoint().getStr() << std::endl;
-                        exit(1);
-                    } else {
-                        y = it->second;
-                    }
+                    // if (it == this->P_to_m.end()) {
+                    //     std::cerr << "[Error] y not found in P_to_m! y = " << Y.getPoint().getStr() << std::endl;
+                    //     exit(1);
+                    // } else {
+                    //     y = it->second;
+                    // }
                 } else 
                 {   
                     cout << "solve_parallel_with_pool: " << i << endl;
@@ -807,9 +808,9 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
                 lut_share[i].set_random(bound);
                 BLS12381Element l_1, cip_;
                 l_1 = BLS12381Element(lut_share[i].get_message());
+                cip_ = l_1;
                 l_1 += c0_[i] * this->elgl->kp.get_sk().get_sk();
                 l_1_v[i] = l_1;  
-                cip_ = BLS12381Element(lut_share[i].get_message());
                 cip_ += this->global_pk.get_pk() * this->elgl->kp.get_sk().get_sk();
                 cip_v[i] = cip_;  
             }));

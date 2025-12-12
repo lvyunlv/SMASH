@@ -59,7 +59,7 @@ int main(int argc, char** argv) {
             x.assign(line);
             x_share.push_back(x);
             if (x.get_message().getUint64() > (1ULL << op) - 1) {
-                std::cerr << "Error: input value exceeds table size in Party: " << party << std::endl;
+                std::cerr << "Error: input value exceeds in Party: " << party << std::endl;
                 cout << "Error value: " << x.get_message().getUint64() << ", nd = " << (1ULL << op) << endl;
                 return 1;
             }

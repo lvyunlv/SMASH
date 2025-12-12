@@ -62,8 +62,9 @@ int main(int argc, char** argv) {
     ThreadPool pool(threads);
     MultiIO* io = new MultiIO(party, num_party, net_config);
     ELGL<MultiIOBase>* elgl = new ELGL<MultiIOBase>(num_party, io, &pool, party);
-    std::string tablefile = "init"; int aln = 8; Fr alpha_fr = alpha_init(aln);
-    emp::LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party, party, io, &pool, elgl, tablefile, alpha_fr, aln, aln);
+    std::string tablefile = "init"; int ran = 12; Fr alpha_fr = alpha_init(ran);
+    emp::LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party, party, 
+    io, &pool, elgl, tablefile, alpha_fr, ran, ran);
     cout << "Number of parties: " << num_party << endl;
     lvt->DistKeyGen(0);
     cout << "Key Generation Done." << endl;
@@ -101,8 +102,8 @@ int main(int argc, char** argv) {
             Plaintext x;
             x.assign(value);
             x_share.push_back(x);
-            if (value > (1ULL << aln) - 1) {
-                std::cerr << "Error: input value exceeds table size in Party: " << party << std::endl;
+            if (value > (1ULL << ran) - 1) {
+                std::cerr << "Error: input value exceeds in Party: " << party << std::endl;
                 return 1;
             }
         }

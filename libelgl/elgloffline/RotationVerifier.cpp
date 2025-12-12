@@ -24,7 +24,6 @@ void RotationVerifier::NIZKPoK(std::vector<BLS12381Element> &dx, std::vector<BLS
         for (size_t i = 0; i < P.n_tilde; i++){
             ck[i+1].unpack(ciphertexts);
             MK[i].unpack(ciphertexts);
-
         }
         BLS12381Element C_Tilde, C;
         C_Tilde.unpack(ciphertexts);
@@ -77,12 +76,11 @@ void RotationVerifier::NIZKPoK(std::vector<BLS12381Element> &dx, std::vector<BLS
             future.get();
         }
         futures.clear();
-        for (size_t i = 0; i < n_tilde; i++) {
+        for (size_t i=0; i<n_tilde; i++) {
             futures.push_back(pool->enqueue([&, i]() {
                 Plaintext tmp;
                 BLS12381Element local_L, local_R;
-                tmp = z[0] * miu_k[i];
-                tmp += z[1] * niu_k[i];
+                tmp = z[0]*miu_k[i] + z[1]*niu_k[i];
                 local_L = BLS12381Element(tmp.get_message());
                 tmp = z[0] * rou_k[i];
                 tmp += z[2] * niu_k[i];

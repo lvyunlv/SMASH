@@ -139,9 +139,6 @@ namespace emp {
                 }
                 if (keygen){
                     kp.generate();
-                    // Fr sk_ = 1;
-                    // kp.sk.assign_sk(sk_);
-                    // kp.pk = ELGL_PK(kp.sk);
                 }
             }
 

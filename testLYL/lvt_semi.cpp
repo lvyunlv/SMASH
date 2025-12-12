@@ -58,8 +58,9 @@ int main(int argc, char** argv) {
     ThreadPool pool(threads);
     MultiIO* io = new MultiIO(party, num_party, net_config);
     ELGL<MultiIOBase>* elgl = new ELGL<MultiIOBase>(num_party, io, &pool, party); 
-    std::string tablefile = "init"; int aln = 8; int su = 1ULL << aln; Fr alpha_fr = alpha_init(aln);
-    emp::LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party, party, io, &pool, elgl, tablefile, alpha_fr, aln, aln);
+    std::string tablefile = "init"; int ran = 12; Fr alpha_fr = alpha_init(ran);
+    emp::LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party, party, 
+    io, &pool, elgl, tablefile, alpha_fr, ran, ran);
     size_t initial_memory = get_current_memory_usage();
     lvt->DistKeyGen(1);lvt->generate_shares_(lvt->lut_share, lvt->rotation, lvt->table);
     std::vector<Plaintext> x_share;
@@ -75,9 +76,9 @@ int main(int argc, char** argv) {
             Plaintext x;
             x.assign(line);
             x_share.push_back(x);
-            if (x.get_message().getUint64() > (1ULL << aln) - 1) {
-                std::cerr << "Error: input value exceeds table size in Party: " << party << std::endl;
-                cout << "Error value: " << x.get_message().getUint64() << ", su = " << (1ULL << aln) << endl;
+            if (x.get_message().getUint64() > (1ULL << ran) - 1) {
+                std::cerr << "Error: input value exceeds in Party: " << party << std::endl;
+                cout << "Error value: " << x.get_message().getUint64() << ", ran = " << (1ULL << ran) << endl;
                 return 1;
             }
         }
@@ -95,7 +96,7 @@ int main(int argc, char** argv) {
             }
         }
     }
-    Plaintext tb_field = Plaintext(su);
+    Plaintext tb_field = Plaintext(ran);
     vector<Plaintext> x_sums(x_size);
     std::vector<std::future<void>> futs;
     futs.reserve(x_size);
