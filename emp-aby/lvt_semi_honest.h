@@ -33,7 +33,7 @@ const int thread_num = 8;
 
 namespace emp{
 
-void initialize_network_conditions(const std::string& condition);
+void nt(const std::string& condition);
 
 
 void deserializeTable(vector<int64_t>& table, const char* filename, size_t table_size = 1<<16) {

@@ -82,7 +82,7 @@ namespace emp {
 
     inline std::unique_ptr<NetworkSimulator> network_simulator;
 
-    inline void initialize_network_conditions(const std::string& condition) {
+    inline void nt(const std::string& condition) {
         if (condition == "local") {
             // 10 Gbps, 0.1ms
             network_simulator = std::make_unique<NetworkSimulator>(0.1, 10 * 1000 * 1000);
@@ -97,6 +97,13 @@ namespace emp {
             network_simulator.reset();
         }
     }
+    inline void nta() {
+        network_simulator = std::make_unique<NetworkSimulator>(0.1, 1 * 1000 * 1000);
+    }
+    inline void ntw() {
+        network_simulator = std::make_unique<NetworkSimulator>(100, 200 * 1000);
+    }
+    
 
     inline void simulate_network_transfer(size_t bytes) {
         if (network_simulator) network_simulator->simulate(bytes);

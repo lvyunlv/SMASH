@@ -1,5 +1,0 @@
-[DEBUG] Trying to open config file: /workspace/lyl/SMASH/config/parties8.txt
-[DEBUG] Config file opened successfully.
-Number of parties: 6
-Offline time: 18.7003 s, comm: 4.48106 MB
-Online time: 0.201437 s, comm: 0.000424385 MB

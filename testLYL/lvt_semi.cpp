@@ -21,13 +21,12 @@ int num_party;
 int main(int argc, char** argv) {
     BLS12381Element::init();
     if (argc < 5) {
-        std::cout << "Format: <PartyID> <port> <num_parties> <network_condition>" << std::endl;
+        std::cout << "Format: <PartyID> <port> <num_parties> <nwc>" << std::endl;
         return 0;
     }
     parse_party_and_port(argv, &party, &port);
     num_party = std::stoi(argv[3]);
-    std::string network_condition = argv[4];
-    initialize_network_conditions(network_condition);
+    std::string nwc = argv[4];
     std::vector<std::pair<std::string, unsigned short>> net_config;
     if (argc >= 6) {
         const char* file = argv[5];
@@ -58,7 +57,8 @@ int main(int argc, char** argv) {
     ThreadPool pool(threads);
     MultiIO* io = new MultiIO(party, num_party, net_config);
     ELGL<MultiIOBase>* elgl = new ELGL<MultiIOBase>(num_party, io, &pool, party); 
-    std::string tablefile = "init"; int aln = 8; int su = 1ULL << aln; Fr alpha_fr = alpha_init(aln);
+    std::string tablefile = "init"; int aln=8; 
+    int su = 1ULL << aln; Fr alpha_fr = alpha_init(aln);
     emp::LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party, party, io, &pool, elgl, tablefile, alpha_fr, aln, aln);
     size_t initial_memory = get_current_memory_usage();
     lvt->DistKeyGen(1);lvt->generate_shares_(lvt->lut_share, lvt->rotation, lvt->table);
@@ -166,6 +166,7 @@ int main(int argc, char** argv) {
         }
     }
     std::vector<Plaintext> out(x_size);
+    nt(nwc);
     int bytes_start1 = io->get_total_bytes_sent();
     auto t3 = std::chrono::high_resolution_clock::now();
     auto output1 = lvt->lookup_online_batch(x_share);

@@ -84,6 +84,18 @@ void halfunpack(BLS12381Element G1, std::stringstream& is) {
     }
 }
 
+Plaintext set_challenge(const std::stringstream& ciphertexts) {
+    Plaintext challenge;
+    auto* buf = ciphertexts.rdbuf();
+    std::streampos size = buf->pubseekoff(0, ciphertexts.end, ciphertexts.in);
+    buf->pubseekpos(0, ciphertexts.in);
+    char* tmp = new char[size];
+    buf->sgetn(tmp, size);
+    challenge.setHashof(tmp, size);
+    delete[] tmp;
+    return challenge;
+}
+
 template <typename IO>
 class LVT{
     public:
@@ -123,6 +135,7 @@ class LVT{
     tuple<Plaintext, vector<Ciphertext>> lookup_online(Plaintext& x_share, vector<Ciphertext>& x_cipher);
     tuple<Plaintext, vector<Ciphertext>> lookup_online_(Plaintext& x_share, Ciphertext& x_cipher, vector<Ciphertext>& x_ciphers);
     tuple<vector<Plaintext>, vector<vector<Ciphertext>>> lookup_online_batch(vector<Plaintext>& x_share, vector<vector<Ciphertext>>& x_cipher); 
+    tuple<vector<Plaintext>, vector<vector<Ciphertext>>> lookup_online_batch(vector<Plaintext>& x_share, vector<Ciphertext>& x_cipher); 
     vector<Plaintext> lookup_online_batch_(vector<Plaintext>& x_share);
     void save_full_state(const std::string& filename);
     void load_full_state(const std::string& filename);
@@ -1275,21 +1288,24 @@ tuple<Plaintext, vector<Ciphertext>> LVT<IO>::lookup_online_(Plaintext& x_share,
 
     x_ciphers[party-1] = x_cipher;
     u_shares[party-1] = x_share + this->rotation;
-
+    std::stringstream send_ss;
+    x_ciphers[party-1].pack(send_ss);
+    u_shares[party-1].pack(send_ss);
     for (size_t i = 1; i <= num_party; i++){
         res.push_back(pool->enqueue([this, i, &x_ciphers, &u_shares](){
             if (i != party){
+                std::stringstream recv_ss;
+                elgl->deserialize_recv_(recv_ss, i);
                 Ciphertext x_cip;
-                elgl->deserialize_recv(x_cip, i);
+                x_cip.unpack(recv_ss);
                 Plaintext u_share;
-                elgl->deserialize_recv(u_share, i);
+                u_share.unpack(recv_ss);
                 x_ciphers[i-1] = x_cip;
                 u_shares[i-1] = u_share;
             }
         }));
     }
-    elgl->serialize_sendall(x_cipher, party);
-    elgl->serialize_sendall(u_shares[party-1], party);
+    elgl->serialize_sendall_(send_ss);
     for (auto& v : res)
         v.get();
     res.clear();
@@ -1320,7 +1336,6 @@ tuple<Plaintext, vector<Ciphertext>> LVT<IO>::lookup_online_(Plaintext& x_share,
     size_t index = static_cast<size_t>(index_mpz.getLow32bit());
 
     out = this->lut_share[index];
-    // cout << "party: " << party << " out = " << out.get_message().getStr() << endl;
     out_ciphers.resize(num_party);
     for (size_t i = 0; i < num_party; i++){
         Ciphertext tmp(user_pk[i].get_pk(), cip_lut[i][index]);
@@ -1341,7 +1356,7 @@ tuple<vector<Plaintext>, vector<vector<Ciphertext>>> LVT<IO>::lookup_online_batc
     size_t x_size = x_shares.size();
     if (x_size == 0) return {};
     vector<Plaintext> out(x_size);
-    vector<vector<Ciphertext>> out_ciphers(x_size, vector<Ciphertext>(num_party));
+    vector<vector<Ciphertext>> out_ciphers(num_party, vector<Ciphertext>(x_size));
     vector<std::future<void>> fut;  
     fut.reserve(x_size);
     vector<Plaintext>  local_u_share(x_size);
@@ -1350,7 +1365,141 @@ tuple<vector<Plaintext>, vector<vector<Ciphertext>>> LVT<IO>::lookup_online_batc
     vector<BLS12381Element> local_p1(x_size);
     vector<BLS12381Element> p_sum(x_size);
     Fr sk = elgl->kp.sk.get_sk();
+    for (size_t i = 0; i < x_size; i++) {
+        fut.push_back(pool->enqueue([&, i]() {
+            local_u_share[i]  = x_shares[i]  + rotation;
+            u_total[i] = local_u_share[i];
+            c_total[i] = x_ciphers[0][i] + cr_i[0];
+            for (size_t p = 1; p < num_party; p++) {
+                c_total[i] += x_ciphers[p][i] + cr_i[p];
+            }
+            local_p1[i] = c_total[i].get_c0() * sk;
+            p_sum[i] = local_p1[i];
+        }));
+    }
+    for (auto &f : fut) f.get();
+    fut.clear();
+    std::stringstream send_ss;
+    for (size_t i = 0; i < x_size; ++i) {
+        local_p1[i].pack(send_ss);
+        local_u_share[i].pack(send_ss);
+    }
+    Plaintext com = set_challenge(send_ss);
+    vector<Plaintext> com_(num_party);
+    elgl->serialize_sendall(com);
+    for (int p = 1; p <= num_party; p++) {
+        if (p == party) continue;
+        fut.push_back(pool->enqueue([&, p]() {
+            elgl->deserialize_recv(com_[p-1], p);
+        }));
+    }
+    for (auto &f : fut) f.get();
+    fut.clear();
+    elgl->serialize_sendall_(send_ss);
+    vector<std::stringstream> recv_ss(num_party);
+    for (int p = 1; p <= num_party; p++) {
+        if (p == party) continue;
+        fut.push_back(pool->enqueue([&, p]() {
+            elgl->deserialize_recv_(recv_ss[p-1], p);
+        }));
+    }
+    for (auto &f : fut) f.get();
+    fut.clear();
+    vector<vector<BLS12381Element>> recv_p1(num_party, vector<BLS12381Element>(x_size));
+    vector<vector<Plaintext>>  recv_shares(num_party, vector<Plaintext>(x_size));
+    for (size_t p = 1; p <= num_party; p++) {
+        if (p == party) continue;
+        fut.push_back(pool->enqueue([&, p]() {
+            std::stringstream ol(recv_ss[p-1].str());
+            Plaintext pppp = set_challenge(ol);
+            if (com_[p-1].get_message().getMpz() != pppp.get_message().getMpz()) {
+                throw std::runtime_error("lookup_online_batch check failed: com_ != set_challenge(recv_ss)");
+            }
+            for (size_t i = 0; i < x_size; ++i) {
+                recv_p1[p-1][i].unpack(recv_ss[p-1]);
+                recv_shares[p-1][i].unpack(recv_ss[p-1]);
+            }
+        }));
+    }
+    for (auto &f : fut) f.get();
+    fut.clear();
+    size_t num_workers = std::min(static_cast<size_t>(thread_num), x_size);
+    size_t block_size = (x_size + num_workers - 1) / num_workers;
+    for (size_t w = 0; w < num_workers; ++w) {
+        size_t start = w * block_size;
+        size_t end = std::min(x_size, start + block_size);
+        if (start >= end) continue;
+        fut.push_back(pool->enqueue([&, start, end]() {
+            for (size_t i = start; i < end; ++i) {
+                for (size_t p = 1; p <= num_party; ++p) {
+                    if (p == party) continue;
+                    p_sum[i] += recv_p1[p-1][i];
+                    u_total[i] += recv_shares[p-1][i];
+                }
+            }
+        }));
+    }
+    for (auto &f : fut) f.get();
+    fut.clear();
+    mcl::Vint su_mod;
+    su_mod.setStr(to_string(su));
+    for (size_t i = 0; i < x_size; i++) {
+        fut.push_back(pool->enqueue([&, i]() {
+            BLS12381Element H = c_total[i].get_c1() - p_sum[i];
+            BLS12381Element U = BLS12381Element(u_total[i].get_message());
+            if (H != U) {
+                std::cerr << "[Error] lookup_online_batch verify fail at i=" << i << " party=" << party << "\n";
+                exit(1);
+            }
+            mcl::Vint v = u_total[i].get_message().getMpz();
+            v %= su_mod;
+            u_total[i].assign(v.getStr());
+            size_t idx = static_cast<size_t>(v.getLow32bit());
+            out[i] = lut_share[idx];
+            for (size_t p = 0; p < num_party; p++)
+                out_ciphers[p][i] = Ciphertext(user_pk[p].get_pk(), cip_lut[p][idx]);
+        }));
+    }
+    for (auto &f : fut) f.get();
+    fut.clear();
+    return { out, out_ciphers };
+}
 
+template <typename IO>
+tuple<vector<Plaintext>, vector<vector<Ciphertext>>> LVT<IO>::lookup_online_batch(vector<Plaintext>& x_shares, vector<Ciphertext>& x_cipher)
+{
+    size_t x_size = x_shares.size();
+    if (x_size == 0) return {};
+    vector<vector<Ciphertext>> x_ciphers(num_party, vector<Ciphertext>(x_size));
+    vector<std::future<void>> recv_futs;
+    std::stringstream sendss;
+    for (size_t i = 0; i < x_size; ++i) {
+        x_cipher[i].pack(sendss);
+    }
+    for (size_t p = 1; p <= num_party; p++) {
+        if (p == party) continue;
+        recv_futs.push_back(pool->enqueue([&, p]() {
+            std::stringstream recv_ss;
+            elgl->deserialize_recv_(recv_ss, p);
+            for (size_t i = 0; i < x_size; ++i) {
+                x_ciphers[p-1][i].unpack(recv_ss);
+            }
+        }));
+    }
+    elgl->serialize_sendall_(sendss);
+    for (auto &f : recv_futs) f.get();
+    recv_futs.clear();
+    
+    vector<Plaintext> out(x_size);
+    vector<vector<Ciphertext>> out_ciphers(num_party, vector<Ciphertext>(x_size));
+    vector<std::future<void>> fut;  
+    fut.reserve(x_size);
+    vector<Plaintext>  local_u_share(x_size);
+    vector<Plaintext>  u_total(x_size);
+    vector<Ciphertext> c_total(x_size);
+    vector<BLS12381Element> local_p1(x_size);
+    vector<BLS12381Element> p_sum(x_size);
+    Fr sk = elgl->kp.sk.get_sk();
     for (size_t i = 0; i < x_size; i++) {
         fut.push_back(pool->enqueue([&, i]() {
             local_u_share[i]  = x_shares[i]  + rotation;
@@ -1371,23 +1520,37 @@ tuple<vector<Plaintext>, vector<vector<Ciphertext>>> LVT<IO>::lookup_online_batc
         local_p1[i].pack(send_ss);
         local_u_share[i].pack(send_ss);
     }
-    vector<std::stringstream> recv_ss(num_party);
-    for (size_t p = 1; p <= num_party; p++) {
+    Plaintext com = set_challenge(send_ss);
+    vector<Plaintext> com_(num_party);
+    elgl->serialize_sendall(com);
+    for (int p = 1; p <= num_party; p++) {
         if (p == party) continue;
-
+        fut.push_back(pool->enqueue([&, p]() {
+            elgl->deserialize_recv(com_[p-1], p);
+        }));
+    }
+    for (auto &f : fut) f.get();
+    fut.clear();
+    elgl->serialize_sendall_(send_ss);
+    vector<std::stringstream> recv_ss(num_party);
+    for (int p = 1; p <= num_party; p++) {
+        if (p == party) continue;
         fut.push_back(pool->enqueue([&, p]() {
             elgl->deserialize_recv_(recv_ss[p-1], p);
         }));
     }
-    elgl->serialize_sendall_(send_ss);
     for (auto &f : fut) f.get();
     fut.clear();
-
     vector<vector<BLS12381Element>> recv_p1(num_party, vector<BLS12381Element>(x_size));
     vector<vector<Plaintext>>  recv_shares(num_party, vector<Plaintext>(x_size));
     for (size_t p = 1; p <= num_party; p++) {
         if (p == party) continue;
         fut.push_back(pool->enqueue([&, p]() {
+            std::stringstream ol(recv_ss[p-1].str());
+            Plaintext pppp = set_challenge(ol);
+            if (com_[p-1].get_message().getMpz() != pppp.get_message().getMpz()) {
+                throw std::runtime_error("lookup_online_batch check failed: com_ != set_challenge(recv_ss)");
+            }
             for (size_t i = 0; i < x_size; ++i) {
                 recv_p1[p-1][i].unpack(recv_ss[p-1]);
                 recv_shares[p-1][i].unpack(recv_ss[p-1]);
@@ -1396,7 +1559,6 @@ tuple<vector<Plaintext>, vector<vector<Ciphertext>>> LVT<IO>::lookup_online_batc
     }
     for (auto &f : fut) f.get();
     fut.clear();
-
     size_t num_workers = std::min(static_cast<size_t>(thread_num), x_size);
     size_t block_size = (x_size + num_workers - 1) / num_workers;
     for (size_t w = 0; w < num_workers; ++w) {
@@ -1415,29 +1577,23 @@ tuple<vector<Plaintext>, vector<vector<Ciphertext>>> LVT<IO>::lookup_online_batc
     }
     for (auto &f : fut) f.get();
     fut.clear();
-
     mcl::Vint su_mod;
     su_mod.setStr(to_string(su));
     for (size_t i = 0; i < x_size; i++) {
         fut.push_back(pool->enqueue([&, i]() {
             BLS12381Element H = c_total[i].get_c1() - p_sum[i];
             BLS12381Element U = BLS12381Element(u_total[i].get_message());
-            if (H != U) {
-                std::cerr << "[Error] lookup_online_batch verify fail at i=" << i << " party=" << party << "\n";
-                exit(1);
-            }
             mcl::Vint v = u_total[i].get_message().getMpz();
             v %= su_mod;
             u_total[i].assign(v.getStr());
             size_t idx = static_cast<size_t>(v.getLow32bit());
             out[i] = lut_share[idx];
             for (size_t p = 0; p < num_party; p++)
-                out_ciphers[i][p] = Ciphertext(user_pk[p].get_pk(), cip_lut[p][idx]);
+                out_ciphers[p][i] = Ciphertext(user_pk[p].get_pk(), cip_lut[p][idx]);
         }));
     }
     for (auto &f : fut) f.get();
     fut.clear();
-
     return { out, out_ciphers };
 }
 
@@ -1621,11 +1777,9 @@ std::vector<Fr> thdcp_batch(std::vector<Ciphertext>& c_batch, ELGL<IO>* elgl, co
     std::vector<std::future<void>> compute_futures;
     size_t num_threads = std::min(static_cast<size_t>(thread_num), batch_size);
     size_t block_size = (batch_size + num_threads - 1) / num_threads;
-    
     for (size_t t = 0; t < num_threads; ++t) {
         size_t start = t * block_size;
         size_t end = std::min(start + block_size, batch_size);
-        
         if (start < end) {
             compute_futures.push_back(pool->enqueue([&, start, end]() {
                 for (size_t i = start; i < end; ++i) {
@@ -1635,25 +1789,20 @@ std::vector<Fr> thdcp_batch(std::vector<Ciphertext>& c_batch, ELGL<IO>* elgl, co
             }));
         }
     }
-    
     for (auto& fut : compute_futures) fut.get();
     compute_futures.clear();
     std::vector<std::string> commits(batch_size), responses(batch_size);
-    
     for (size_t t = 0; t < num_threads; ++t) {
         size_t start = t * block_size;
         size_t end = std::min(start + block_size, batch_size);
-        
         if (start < end) {
             compute_futures.push_back(pool->enqueue([&, start, end]() {
                 ExpProof exp_proof(global_pk);
                 ExpProver exp_prover(exp_proof);
                 BLS12381Element y1 = user_pks[party-1].get_pk();
-                
                 for (size_t i = start; i < end; ++i) {
                     std::stringstream commit, response;
                     BLS12381Element g1 = c_batch[i].get_c0();
-                    
                     try {
                         exp_prover.NIZKPoK(exp_proof, commit, response, g1, y1, local_ask_batch[i], sk, party, pool);
                         commits[i] = commit.str();
@@ -1666,7 +1815,6 @@ std::vector<Fr> thdcp_batch(std::vector<Ciphertext>& c_batch, ELGL<IO>* elgl, co
             }));
         }
     }
-    
     for (auto& fut : compute_futures) fut.get();
     compute_futures.clear();
     std::stringstream batch_commits, batch_responses;
@@ -1683,7 +1831,6 @@ std::vector<Fr> thdcp_batch(std::vector<Ciphertext>& c_batch, ELGL<IO>* elgl, co
     elgl->serialize_sendall_(response_b64);
     std::vector<std::future<void>> verify_futures;
     std::mutex ask_parts_mutex;
-    
     for (int i = 1; i <= num_party; ++i) {
         if (i != party) {
             verify_futures.push_back(pool->enqueue([&, i]() {
@@ -1691,16 +1838,13 @@ std::vector<Fr> thdcp_batch(std::vector<Ciphertext>& c_batch, ELGL<IO>* elgl, co
                     std::stringstream local_commit_stream, local_response_stream;
                     elgl->deserialize_recv_(local_commit_stream, i);
                     elgl->deserialize_recv_(local_response_stream, i);
-                    
                     std::string comm_raw = base64_decode(local_commit_stream.str());
                     std::string resp_raw = base64_decode(local_response_stream.str());
                     std::stringstream comm_stream(comm_raw), resp_stream(resp_raw);
-                    
                     size_t received_batch_size;
                     char delimiter;
                     comm_stream >> received_batch_size >> delimiter;
                     resp_stream >> received_batch_size >> delimiter;
-                    
                     if (received_batch_size != batch_size) {
                         throw std::runtime_error("Batch size mismatch from party " + std::to_string(i));
                     }
@@ -1712,16 +1856,12 @@ std::vector<Fr> thdcp_batch(std::vector<Ciphertext>& c_batch, ELGL<IO>* elgl, co
                         size_t comm_len, resp_len;
                         comm_stream >> comm_len >> delimiter;
                         resp_stream >> resp_len >> delimiter;
-                        
                         std::string single_commit(comm_len, '\0'), single_response(resp_len, '\0');
                         comm_stream.read(&single_commit[0], comm_len);
                         resp_stream.read(&single_response[0], resp_len);
-                        
                         std::stringstream single_comm_stream(single_commit), single_resp_stream(single_response);
-                        
                         BLS12381Element g1 = c_batch[j].get_c0();
                         BLS12381Element ask_i;
-                        
                         exp_verifier.NIZKPoK(g1, y1_other, ask_i, single_comm_stream, single_resp_stream, pool, i);
                         batch_ask_i[j] = ask_i;
                     }
@@ -1736,15 +1876,12 @@ std::vector<Fr> thdcp_batch(std::vector<Ciphertext>& c_batch, ELGL<IO>* elgl, co
             }));
         }
     }
-    
     for (auto& fut : verify_futures) fut.get();
     verify_futures.clear();
     std::vector<Fr> results(batch_size);
-    
     for (size_t t = 0; t < num_threads; ++t) {
         size_t start = t * block_size;
         size_t end = std::min(start + block_size, batch_size);
-        
         if (start < end) {
             compute_futures.push_back(pool->enqueue([&, start, end]() {
                 for (size_t i = start; i < end; ++i) {
@@ -1760,7 +1897,6 @@ std::vector<Fr> thdcp_batch(std::vector<Ciphertext>& c_batch, ELGL<IO>* elgl, co
             }));
         }
     }
-    
     for (auto& fut : compute_futures) fut.get();
     return results;
 }

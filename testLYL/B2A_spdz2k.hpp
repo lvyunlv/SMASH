@@ -24,13 +24,13 @@ inline SPDZ2k<MultiIOBase>::LabeledShare B2A(
     SPDZ2k<MultiIOBase>& spdz2k,
     int party,
     int num_party,
+    string nw,
     MultiIO* io,
     ThreadPool* pool,
     const uint64_t& FIELD_SIZE,
     const vector<TinyMAC<MultiIOBase>::LabeledShare>& x_bits,
     double& online_time,
-    double& online_comm,
-    bool is
+    double& online_comm
 ) {
     int bytes = io->get_total_bytes_sent();
     auto t = std::chrono::high_resolution_clock::now();
@@ -40,55 +40,65 @@ inline SPDZ2k<MultiIOBase>::LabeledShare B2A(
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<int> bit_dis(0, 1);
-    for (int i = 0; i < l; ++i) r_bits[i] = tiny.distributed_share(bit_dis(gen));
+    r_bits[0] = tiny.distributed_share(bit_dis(gen));
+    for (int i = 1; i < l; ++i) {nta();r_bits[i] = tiny.distributed_share(bit_dis(gen));}
     vector<SPDZ2k<MultiIOBase>::LabeledShare> shared_r(l);
-    shared_x.resize(l);
-
+    shared_x.resize(l);nt(nw);
     vector<Ciphertext> x_cipher(l), r_cipher(l), x_lut_ciphers(num_party);
     vector<Plaintext> x_plain(l), r_plain(l); 
-    for (int i = 0; i < l; ++i) {
+    Plaintext plain_i;
+    plain_i.assign(std::to_string(r_bits[0].value)); 
+    r_cipher[0] = lvt->global_pk.encrypt(plain_i);
+    vector<Ciphertext> r_ciphers;
+    r_ciphers.resize(num_party); 
+    auto result = lvt->lookup_online_(plain_i, r_cipher[0], r_ciphers);
+    r_plain[0] = std::get<0>(result); nta(); r_ciphers = std::get<1>(result);  
+    shared_r[0] = L2A_spdz2k::L2A_for_B2A(elgl, lvt, spdz2k, party, num_party, io, pool, r_plain[0], r_ciphers, FIELD_SIZE);
+    if (shared_r[0].value == 0) shared_r[0].value = 0;
+    for (int i = 1; i < l; ++i) {
         Plaintext plain_i;
         plain_i.assign(std::to_string(r_bits[i].value)); 
         r_cipher[i] = lvt->global_pk.encrypt(plain_i);
-
         vector<Ciphertext> r_ciphers;
         r_ciphers.resize(num_party); 
         auto result = lvt->lookup_online_(plain_i, r_cipher[i], r_ciphers);
         r_plain[i] = std::get<0>(result);
         r_ciphers = std::get<1>(result);  
-        
         shared_r[i] = L2A_spdz2k::L2A_for_B2A(elgl, lvt, spdz2k, party, num_party, io, pool, r_plain[i], r_ciphers, FIELD_SIZE);
         if (shared_r[i].value == 0) shared_r[i].value = 0;
-    }
-
+    } 
     auto tt = std::chrono::high_resolution_clock::now();
     int bytes_ = io->get_total_bytes_sent();
     double comm_kb1 = double(bytes_ - bytes) / 1024.0;
     double time_ms1 = std::chrono::duration<double, std::milli>(tt - t).count();
-    if (is) {std::random_device rd; std::mt19937 gen(rd());
-    std::uniform_real_distribution<double> delay_dist(0.6, 1.0);
-    time_ms1 += delay_dist(gen) * 1000.0;}
     std::cout << std::fixed << std::setprecision(6)
               << "Offline Communication: " << comm_kb1 << " KB, "
               << "Offline Time: " << time_ms1 << " ms" << std::endl;
     
     int bytes_start = io->get_total_bytes_sent();
     auto t1 = std::chrono::high_resolution_clock::now();
-
-    for (int i = 0; i < l; ++i) {
+    plain_i.assign(std::to_string(x_bits[0].value));
+    x_cipher[0] = lvt->global_pk.encrypt(plain_i);
+    vector<Ciphertext> x_ciphers;nt(nw);
+    x_ciphers.resize(num_party);  
+    auto result1 = lvt->lookup_online_(plain_i, x_cipher[0], x_ciphers);
+    x_plain[0] = std::get<0>(result1);nta();
+    auto lut_ciphers = std::get<1>(result1);  
+    for (int i = 1; i < l; ++i) {
         Plaintext plain_i;
         plain_i.assign(std::to_string(x_bits[i].value));
         x_cipher[i] = lvt->global_pk.encrypt(plain_i);
         vector<Ciphertext> x_ciphers;
         x_ciphers.resize(num_party);  
-        auto result = lvt->lookup_online_(plain_i, x_cipher[i], x_ciphers);
-        x_plain[i] = std::get<0>(result);  
-        auto lut_ciphers = std::get<1>(result);  
-    }
-
+        auto result2 = lvt->lookup_online_(plain_i, x_cipher[i], x_ciphers);
+        x_plain[i] = std::get<0>(result2);  
+        auto lut_ciphers = std::get<1>(result2);  
+    }nt(nw);
     int skip_bytes_start = io->get_total_bytes_sent();
     auto skip_t1 = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < l; i++) {
+    shared_x[0] = L2A_spdz2k::L2A_for_B2A(elgl, lvt, spdz2k, party, num_party, io, pool, x_plain[0], x_lut_ciphers, FIELD_SIZE);
+    if (shared_x[0].value == 0) shared_x[0].value = 0;nta();
+    for (int i = 1; i < l; i++) {
         shared_x[i] = L2A_spdz2k::L2A_for_B2A(elgl, lvt, spdz2k, party, num_party, io, pool, x_plain[i], x_lut_ciphers, FIELD_SIZE);
         if (shared_x[i].value == 0) shared_x[i].value = 0;
     }
@@ -96,25 +106,20 @@ inline SPDZ2k<MultiIOBase>::LabeledShare B2A(
     auto skip_t2 = std::chrono::high_resolution_clock::now();
     double skip_comm_kb = double(skip_bytes_end - skip_bytes_start) / 1024.0;
     double skip_time_ms = std::chrono::duration<double, std::milli>(skip_t2 - skip_t1).count();
-
     for (int i = 0; i < l; ++i) u_bits[i] = tiny.add(x_bits[i], r_bits[i]);
-
     for (int i = 0; i < l; ++i) {
         auto spdz2k_u = spdz2k.add(shared_x[i], shared_r[i]);
         auto m = spdz2k.multiply(shared_x[i], shared_r[i]);
         auto spdz2k_open = spdz2k.reconstruct(m);
         spdz2k_open = (spdz2k_open % FIELD_SIZE + FIELD_SIZE) % FIELD_SIZE;
-
         m = m * 2;
         m.value = (FIELD_SIZE - m.value) % FIELD_SIZE;
         if (m.value < 0) m.value += FIELD_SIZE;
         m.mac = (FIELD_SIZE - m.mac) % FIELD_SIZE;
         if (m.mac < 0) m.mac += FIELD_SIZE;
-
         spdz2k_u = spdz2k.add(spdz2k_u, m);
         spdz2k_open = spdz2k.reconstruct(spdz2k_u);
         spdz2k_open = (spdz2k_open % FIELD_SIZE + FIELD_SIZE) % FIELD_SIZE;
-
         uint8_t tiny_u = tiny.reconstruct(tiny.add(x_bits[i], r_bits[i]));
         if (((2 + tiny_u % 2)+2)%2 != ((2 + spdz2k_open % 2)+2)%2) {
             throw std::runtime_error("B2A_spdz2k check failed: decrypted value != share sum");
@@ -128,14 +133,10 @@ inline SPDZ2k<MultiIOBase>::LabeledShare B2A(
     for (int i = 0; i < l; ++i) {
         share_x_decimal = share_x_decimal * 2 + shared_x[i];
     }
-
     int bytes_end = io->get_total_bytes_sent();
     auto t2 = std::chrono::high_resolution_clock::now();
     double comm_kb = double(bytes_end - bytes_start) / 1024.0 - skip_comm_kb;
     double time_ms = std::chrono::duration<double, std::milli>(t2 - t1).count() - skip_time_ms;
-    if (is) {std::random_device rd; std::mt19937 gen(rd());
-    std::uniform_real_distribution<double> delay_dist(0.6, 1.0);
-    time_ms += delay_dist(gen) * 1000.0;}
     std::cout << std::fixed << std::setprecision(6)
               << "Online Communication: " << comm_kb << " KB, "
               << "Online Time: " << time_ms << " ms" << std::endl;
@@ -153,6 +154,7 @@ inline SPDZ2k<MultiIOBase>::LabeledShare B2A_for_A2B(
     SPDZ2k<MultiIOBase>& spdz2k,
     int party,
     int num_party,
+    string nw,
     MultiIO* io,
     ThreadPool* pool,
     const uint64_t& FIELD_SIZE,
@@ -164,67 +166,70 @@ inline SPDZ2k<MultiIOBase>::LabeledShare B2A_for_A2B(
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<int> bit_dis(0, 1);
-    for (int i = 0; i < l; ++i) r_bits[i] = tiny.distributed_share(bit_dis(gen));
+    r_bits[0] = tiny.distributed_share(bit_dis(gen));
+    for (int i = 1; i < l; ++i) {nta();r_bits[i] = tiny.distributed_share(bit_dis(gen));}
     vector<SPDZ2k<MultiIOBase>::LabeledShare> shared_r(l);
-    shared_x.resize(l);
-
+    shared_x.resize(l);nt(nw);
     vector<Ciphertext> x_cipher(l), r_cipher(l), x_lut_ciphers(num_party);
     vector<Plaintext> x_plain(l), r_plain(l); 
-    for (int i = 0; i < l; ++i) {
+    Plaintext plain_i;
+    plain_i.assign(std::to_string(r_bits[0].value)); 
+    r_cipher[0] = lvt->global_pk.encrypt(plain_i);
+    vector<Ciphertext> r_ciphers;
+    r_ciphers.resize(num_party); 
+    auto result = lvt->lookup_online_(plain_i, r_cipher[0], r_ciphers);
+    r_plain[0] = std::get<0>(result); nta(); r_ciphers = std::get<1>(result);  
+    shared_r[0] = L2A_spdz2k::L2A_for_B2A(elgl, lvt, spdz2k, party, num_party, io, pool, r_plain[0], r_ciphers, FIELD_SIZE);
+    if (shared_r[0].value == 0) shared_r[0].value = 0;
+    for (int i = 1; i < l; ++i) {
         Plaintext plain_i;
         plain_i.assign(std::to_string(r_bits[i].value)); 
         r_cipher[i] = lvt->global_pk.encrypt(plain_i);
-
         vector<Ciphertext> r_ciphers;
         r_ciphers.resize(num_party); 
         auto result = lvt->lookup_online_(plain_i, r_cipher[i], r_ciphers);
         r_plain[i] = std::get<0>(result);
         r_ciphers = std::get<1>(result);  
-        
         shared_r[i] = L2A_spdz2k::L2A_for_B2A(elgl, lvt, spdz2k, party, num_party, io, pool, r_plain[i], r_ciphers, FIELD_SIZE);
         if (shared_r[i].value == 0) shared_r[i].value = 0;
-    }
-
-    for (int i = 0; i < l; ++i) {
+    } 
+    plain_i.assign(std::to_string(x_bits[0].value));
+    x_cipher[0] = lvt->global_pk.encrypt(plain_i);
+    vector<Ciphertext> x_ciphers;nt(nw);
+    x_ciphers.resize(num_party);  
+    auto result1 = lvt->lookup_online_(plain_i, x_cipher[0], x_ciphers);
+    x_plain[0] = std::get<0>(result1);nta();
+    auto lut_ciphers = std::get<1>(result1);  
+    for (int i = 1; i < l; ++i) {
         Plaintext plain_i;
         plain_i.assign(std::to_string(x_bits[i].value));
         x_cipher[i] = lvt->global_pk.encrypt(plain_i);
         vector<Ciphertext> x_ciphers;
         x_ciphers.resize(num_party);  
-        auto result = lvt->lookup_online_(plain_i, x_cipher[i], x_ciphers);
-        x_plain[i] = std::get<0>(result);  
-        auto lut_ciphers = std::get<1>(result);  
-    }
-
-    int skip_bytes_start = io->get_total_bytes_sent();
-    auto skip_t1 = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < l; i++) {
+        auto result2 = lvt->lookup_online_(plain_i, x_cipher[i], x_ciphers);
+        x_plain[i] = std::get<0>(result2);  
+        auto lut_ciphers = std::get<1>(result2);  
+    }nt(nw);
+    shared_x[0] = L2A_spdz2k::L2A_for_B2A(elgl, lvt, spdz2k, party, num_party, io, pool, x_plain[0], x_lut_ciphers, FIELD_SIZE);
+    if (shared_x[0].value == 0) shared_x[0].value = 0;nta();
+    for (int i = 1; i < l; i++) {
         shared_x[i] = L2A_spdz2k::L2A_for_B2A(elgl, lvt, spdz2k, party, num_party, io, pool, x_plain[i], x_lut_ciphers, FIELD_SIZE);
         if (shared_x[i].value == 0) shared_x[i].value = 0;
     }
-    int skip_bytes_end = io->get_total_bytes_sent();
-    auto skip_t2 = std::chrono::high_resolution_clock::now();
-    double skip_comm_kb = double(skip_bytes_end - skip_bytes_start) / 1024.0;
-    double skip_time_ms = std::chrono::duration<double, std::milli>(skip_t2 - skip_t1).count();
-
     for (int i = 0; i < l; ++i) u_bits[i] = tiny.add(x_bits[i], r_bits[i]);
-
     for (int i = 0; i < l; ++i) {
         auto spdz2k_u = spdz2k.add(shared_x[i], shared_r[i]);
         auto m = spdz2k.multiply(shared_x[i], shared_r[i]);
         auto spdz2k_open = spdz2k.reconstruct(m);
         spdz2k_open = (spdz2k_open % FIELD_SIZE + FIELD_SIZE) % FIELD_SIZE;
-
         m = m * 2;
         m.value = (FIELD_SIZE - m.value) % FIELD_SIZE;
         if (m.value < 0) m.value += FIELD_SIZE;
         m.mac = (FIELD_SIZE - m.mac) % FIELD_SIZE;
         if (m.mac < 0) m.mac += FIELD_SIZE;
-
         spdz2k_u = spdz2k.add(spdz2k_u, m);
         spdz2k_open = spdz2k.reconstruct(spdz2k_u);
         spdz2k_open = (spdz2k_open % FIELD_SIZE + FIELD_SIZE) % FIELD_SIZE;
-
         uint8_t tiny_u = tiny.reconstruct(tiny.add(x_bits[i], r_bits[i]));
         if (((2 + tiny_u % 2)+2)%2 != ((2 + spdz2k_open % 2)+2)%2) {
             throw std::runtime_error("B2A_for_A2B_spdz2k check failed: decrypted value != share sum");

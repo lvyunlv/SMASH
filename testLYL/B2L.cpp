@@ -24,18 +24,16 @@ int num = 1;
 int main(int argc, char** argv) {
     BLS12381Element::init();
     if (argc < 5) {
-        std::cout << "Usage: <party> <port> <num_party> <network_condition> [ip_config_file]" << std::endl;
+        std::cout << "Usage: <party> <port> <num_party> <nwc> [ip_config_file]" << std::endl;
         return 0;
     }
 
     parse_party_and_port(argv, &party, &port);
     num_party = std::stoi(argv[3]);
-    std::string network_condition = argv[4];
-    bool is_wan = (network_condition == "wan");
-    std::string effective_network_condition = is_wan ? "lan" : network_condition;
-    initialize_network_conditions(effective_network_condition);
+    std::string nwc = argv[4];
+    nt(nwc);
     std::vector<std::pair<std::string, unsigned short>> net_config;
-    if (argc >= 6 && !is_wan) {
+    if (argc >= 6 ) {
         const char* file = argv[5];
         FILE* f = fopen(file, "r");
         if (f != nullptr) {
@@ -90,11 +88,6 @@ int main(int argc, char** argv) {
     auto skip_t2 = std::chrono::high_resolution_clock::now();
     double skip_comm_kb = double(skip_bytes_end - skip_bytes_start) / 1024.0;
     double skip_time_ms = std::chrono::duration<double, std::milli>(skip_t2 - skip_t1).count();
-    if (is_wan) {
-        std::uniform_real_distribution<double> delay_dist(0.6, 1.0);
-        double delay_sec = delay_dist(gen);
-        skip_time_ms += delay_sec * 800.0; 
-    }
 
     cout << "total_comm: " << skip_comm_kb << "KB" << endl;
     cout << "total_time: " << skip_time_ms << "ms" << endl;
