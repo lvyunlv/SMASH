@@ -16,11 +16,11 @@ using namespace emp;
 using namespace std;
 
 int party, port;
-const static int threads = 8;
+const static int threads = 32;
 int num_party;
 const int num = 1;
-const int num_bits = 24;
-const uint64_t FIELD_SIZE = (1ULL << num_bits);
+const int op = 24;
+const uint64_t FIELD_SIZE = (1ULL << op);
 const mcl::Vint MODULUS(FIELD_SIZE);
 
 int main(int argc, char** argv) {
@@ -42,7 +42,7 @@ int main(int argc, char** argv) {
     ELGL<MultiIOBase>* elgl = new ELGL<MultiIOBase>(num_party, io, &pool, party);
 
     Fr alpha_fr = alpha_init(num);
-    LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party, party, io, &pool, elgl, "../bin/table_2.txt", alpha_fr, num, num_bits);
+    LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party, party, io, &pool, elgl, "../bin/table_2.txt", alpha_fr, num, op);
 
     TinyMAC<MultiIOBase> tiny(elgl);
     lvt->generate_shares(lvt->lut_share, lvt->rotation, lvt->table);
@@ -58,9 +58,9 @@ int main(int argc, char** argv) {
         }
     }
     cout << "x_arith: " << lvt->Reconstruct(x_arith, x_cips, elgl, lvt->global_pk, lvt->user_pk, io, &pool, party, num_party, MODULUS).get_message().getUint64() << endl;
-    auto x_bool = L2B::L2B(elgl, lvt, tiny, party, num_party, io, &pool, FIELD_SIZE, num_bits, x_arith, x_cips);
+    auto x_bool = L2B::L2B(elgl, lvt, tiny, party, num_party, io, &pool, FIELD_SIZE, op, x_arith, x_cips);
     vector<int> bits;
-    for (int j = 0; j < num_bits; ++j) {
+    for (int j = 0; j < op; ++j) {
         int bit = tiny.reconstruct(x_bool[j]);
         bits.push_back(bit);
     }

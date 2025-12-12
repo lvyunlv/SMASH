@@ -7,7 +7,7 @@ using namespace emp;
 
 int party, port;
 
-const static int threads = 8;
+const static int threads = 32;
 
 int num_party;
 

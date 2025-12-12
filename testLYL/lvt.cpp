@@ -62,7 +62,7 @@ int main(int argc, char** argv) {
     ThreadPool pool(threads);
     MultiIO* io = new MultiIO(party, num_party, net_config);
     ELGL<MultiIOBase>* elgl = new ELGL<MultiIOBase>(num_party, io, &pool, party);
-    std::string tablefile = "init"; int aln = 10; Fr alpha_fr = alpha_init(aln);
+    std::string tablefile = "init"; int aln = 11; Fr alpha_fr = alpha_init(aln);
     emp::LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party, party, io, &pool, elgl, tablefile, alpha_fr, aln, aln);
     cout << "Number of parties: " << num_party << endl;
     lvt->DistKeyGen(1);

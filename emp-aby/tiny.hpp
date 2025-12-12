@@ -14,7 +14,6 @@ namespace emp {
 
 inline uint8_t xor_mac(uint8_t a, uint8_t b) { return a ^ b; }
 
-// TinyMAC: 恶意安全布尔MPC（不诚实多数）
 template <typename IO>
 class TinyMAC {
 public:
@@ -22,11 +21,11 @@ public:
     int party;
     int num_parties;
     std::mt19937_64 rng;
-    uint8_t mac_key; // 单比特MAC密钥
+    uint8_t mac_key; 
 
     struct LabeledShare {
-        uint8_t value; // 比特份额
-        uint8_t mac;   // MAC
+        uint8_t value; 
+        uint8_t mac;  
         int owner;
         const uint8_t* field_size_ptr;
         LabeledShare() : value(0), mac(0), owner(0), field_size_ptr(nullptr) {}
@@ -128,7 +127,6 @@ public:
         precompute_triples(20);
     }
     ~TinyMAC() {}
-    // 分发布尔份额
     LabeledShare distributed_share(uint8_t xi) {
         std::vector<uint8_t> shares(num_parties, 0);
         uint8_t remain = xi & 1;
@@ -172,7 +170,6 @@ public:
         uint8_t mac = local_share & mac_key;
         return LabeledShare(local_share, mac, party, nullptr);
     }
-    // 重构布尔秘密
     uint8_t reconstruct(const LabeledShare& share) {
         std::stringstream ss;
         share.pack(ss);
@@ -190,11 +187,9 @@ public:
         }
         return result & 1;
     }
-    // 按位异或
     LabeledShare add(const LabeledShare& x, const LabeledShare& y) {
         return x ^ y;
     }
-    // 按位与（带MAC）
     LabeledShare multiply(const LabeledShare& x, const LabeledShare& y) {
         Triple t = get_triple();
         uint8_t epsilon = (x.value ^ t.a) & 1;

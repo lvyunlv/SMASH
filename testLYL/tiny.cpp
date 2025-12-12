@@ -12,7 +12,7 @@ using namespace emp;
 using namespace std;
 
 int party, port;
-const static int threads = 8;
+const static int threads = 32;
 int num_party;
 
 int main(int argc, char** argv) {

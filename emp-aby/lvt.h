@@ -10,7 +10,6 @@
 #include "libelgl/elgloffline/Exp_proof.h"
 #include "libelgl/elgloffline/Exp_prover.h"
 #include "libelgl/elgloffline/Exp_verifier.h"
-
 #include "libelgl/elgloffline/Range_Proof.h"
 #include "libelgl/elgloffline/Range_Prover.h"
 #include "libelgl/elgloffline/Range_Verifier.h"
@@ -122,6 +121,7 @@ class LVT{
     void generate_shares_(vector<Plaintext>& lut_share, Plaintext& rotation, vector<int64_t> table);
     void generate_shares_fake(vector<Plaintext>& lut_share, Plaintext& rotation, vector<int64_t> table);
     tuple<Plaintext, vector<Ciphertext>> lookup_online(Plaintext& x_share, vector<Ciphertext>& x_cipher);
+    tuple<Plaintext, vector<Ciphertext>> lookup_online_(Plaintext& x_share, Ciphertext& x_cipher, vector<Ciphertext>& x_ciphers);
     tuple<vector<Plaintext>, vector<vector<Ciphertext>>> lookup_online_batch(vector<Plaintext>& x_share, vector<vector<Ciphertext>>& x_cipher); 
     vector<Plaintext> lookup_online_batch_(vector<Plaintext>& x_share);
     void save_full_state(const std::string& filename);
@@ -1257,6 +1257,81 @@ tuple<Plaintext, vector<Ciphertext>> LVT<IO>::lookup_online(Plaintext& x_share, 
         Ciphertext tmp(user_pk[i].get_pk(), cip_lut[i][index]);
         out_ciphers[i] = tmp;
     }
+    return std::make_tuple(out, out_ciphers);
+}
+
+template <typename IO>
+tuple<Plaintext, vector<Ciphertext>> LVT<IO>::lookup_online_(Plaintext& x_share, Ciphertext& x_cipher, vector<Ciphertext>& x_ciphers){ 
+    auto start = clock_start();
+    int bytes_start = io->get_total_bytes_sent();
+
+    Plaintext out;
+    vector<Ciphertext> out_ciphers;
+    vector<std::future<void>> res;
+    vector<Plaintext> u_shares;
+
+    x_ciphers.resize(num_party);
+    u_shares.resize(num_party);
+
+    x_ciphers[party-1] = x_cipher;
+    u_shares[party-1] = x_share + this->rotation;
+
+    for (size_t i = 1; i <= num_party; i++){
+        res.push_back(pool->enqueue([this, i, &x_ciphers, &u_shares](){
+            if (i != party){
+                Ciphertext x_cip;
+                elgl->deserialize_recv(x_cip, i);
+                Plaintext u_share;
+                elgl->deserialize_recv(u_share, i);
+                x_ciphers[i-1] = x_cip;
+                u_shares[i-1] = u_share;
+            }
+        }));
+    }
+    elgl->serialize_sendall(x_cipher, party);
+    elgl->serialize_sendall(u_shares[party-1], party);
+    for (auto& v : res)
+        v.get();
+    res.clear();
+
+    Ciphertext c = x_ciphers[0] + cr_i[0];
+    Plaintext uu = u_shares[0];
+    for (size_t i=1; i<num_party; i++){
+        c +=  x_ciphers[i] + cr_i[i];
+        uu += u_shares[i];
+    }
+    mcl::Vint h;
+    h.setStr(to_string(su));
+    mcl::Vint q1 = uu.get_message().getMpz();
+    mcl::gmp::mod(q1, q1, h);
+    uu.assign(q1.getStr());
+
+    Fr u = thdcp(c, elgl, global_pk, user_pk, elgl->io, pool, party, num_party, P_to_m, this);
+    mcl::Vint q2 = u.getMpz(); 
+    mcl::gmp::mod(q2, q2, h);
+    u.setStr(q2.getStr());
+    mcl::Vint tbs;
+    tbs.setStr(to_string(su));
+    mcl::Vint u_mpz = uu.get_message().getMpz(); 
+    mcl::gmp::mod(u_mpz, u_mpz, tbs);
+
+    mcl::Vint index_mpz;
+    index_mpz.setStr(u_mpz.getStr());
+    size_t index = static_cast<size_t>(index_mpz.getLow32bit());
+
+    out = this->lut_share[index];
+    // cout << "party: " << party << " out = " << out.get_message().getStr() << endl;
+    out_ciphers.resize(num_party);
+    for (size_t i = 0; i < num_party; i++){
+        Ciphertext tmp(user_pk[i].get_pk(), cip_lut[i][index]);
+        out_ciphers[i] = tmp;
+    }
+    // cout << "party: " << party << " index = " << index << endl;
+
+    int bytes_end = io->get_total_bytes_sent();
+    double comm_kb = double(bytes_end - bytes_start) / 1024.0;
+    // std::cout << "Online time: " << std::fixed << std::setprecision(6) << time_from(start) / 1e6 << " seconds, " << std::fixed << std::setprecision(6) << "Online communication: " << comm_kb << " KB" << std::endl;
+
     return std::make_tuple(out, out_ciphers);
 }
 

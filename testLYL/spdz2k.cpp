@@ -12,10 +12,10 @@ using namespace emp;
 using namespace std;
 
 int party, port;
-const static int threads = 8;
+const static int threads = 32;
 int num_party;
 const uint64_t FIELD_SIZE = (1ULL << 63);
-int m_bits = 32; 
+int op = 32; 
 
 int main(int argc, char** argv) {
     BLS12381Element::init();
@@ -43,7 +43,7 @@ int main(int argc, char** argv) {
     mcl::gmp::powMod(alpha_vint, g, (p - 1) / n, p);
     alpha.assign(alpha_vint.getStr());
     Fr alpha_fr = alpha.get_message();
-    LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party, party, io, &pool, elgl, "init", alpha_fr, num, m_bits);
+    LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party, party, io, &pool, elgl, "init", alpha_fr, num, op);
     lvt->DistKeyGen(1);
     std::cout << "party: " << party << std::endl;
 

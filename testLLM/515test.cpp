@@ -17,11 +17,11 @@ static double sigmoid(double x) { return 1.0/(1.0+std::exp(-x)); }
 static double tanh_f(double x)    { return std::tanh(x); }
 
 int num_party, party, port;
-const static int threads = 8;
-const int m_bits = 24; 
-const int m_size = 1UL << m_bits; 
+const static int threads = 32;
+const int op = 24; 
+const int m_size = 1UL << op; 
 const int num = 12;
-const size_t tb_size = 1ULL << num; 
+const size_t nd = 1ULL << num; 
 const int frac = 16; 
 const int bitN = 1;
 
@@ -47,7 +47,7 @@ int main(int argc, char** argv) {
         for (int i = 0; i < num_party; ++i) {
             char* c = (char*)malloc(15 * sizeof(char));
             uint p;
-            fscanf(f, "%s %d\tb_size", c, &p);
+            fscanf(f, "%s %d", c, &p);
             net_config.push_back(std::make_pair(std::string(c), p));
             fflush(f);
         }
@@ -70,11 +70,11 @@ int main(int argc, char** argv) {
     std::unique_ptr<LVT<MultiIOBase>> lvt_bit, lvtA, lvtB;
     LVT<MultiIOBase>* lvt_raw_bit = nullptr; LVT<MultiIOBase>* lvt_rawA = nullptr; LVT<MultiIOBase>* lvt_rawB = nullptr;
 
-    LVT<MultiIOBase>::initialize(filebit, lvt_raw_bit, num_party, party, io.get(), &pool, elgl.get(), alpha_fr_bit, bitN, m_bits);
+    LVT<MultiIOBase>::initialize(filebit, lvt_raw_bit, num_party, party, io.get(), &pool, elgl.get(), alpha_fr_bit, bitN, op);
     lvt_bit.reset(lvt_raw_bit);
-    LVT<MultiIOBase>::initialize(fileA, lvt_rawA, num_party, party, io.get(), &pool, elgl.get(), alpha_frA, num, m_bits);
+    LVT<MultiIOBase>::initialize(fileA, lvt_rawA, num_party, party, io.get(), &pool, elgl.get(), alpha_frA, num, op);
     lvtA.reset(lvt_rawA);
-    LVT<MultiIOBase>::initialize(fileB, lvt_rawB, num_party, party, io.get(), &pool, elgl.get(), alpha_frB, num, m_bits);
+    LVT<MultiIOBase>::initialize(fileB, lvt_rawB, num_party, party, io.get(), &pool, elgl.get(), alpha_frB, num, op);
     lvtB.reset(lvt_rawB);
 
     std::vector<Plaintext> x_share;
@@ -92,9 +92,9 @@ int main(int argc, char** argv) {
             Plaintext x;
             x.assign(xval_int);
             x_share.push_back(x);
-            if (x.get_message().getUint64() > (1ULL << m_bits) - 1) {
+            if (x.get_message().getUint64() > (1ULL << op) - 1) {
                 std::cerr << "Error: input value exceeds table size in Party: " << party << std::endl;
-                cout << "Error value: " << x.get_message().getUint64() << ", tb_size = " << (1ULL << m_bits) << endl;
+                cout << "Error value: " << x.get_message().getUint64() << ", nd = " << (1ULL << op) << endl;
                 return 1;
             }
         }
@@ -140,7 +140,7 @@ int main(int argc, char** argv) {
         }
     }
     for (int i = 0; i < x_size; ++i) {
-        auto x_bool = L2B::L2B(elgl.get(), lvt_bit.get(), tiny, party, num_party, io.get(), &pool, m_size, m_bits, x_share[i], x_cips[i]);
+        auto x_bool = L2B::L2B(elgl.get(), lvt_bit.get(), tiny, party, num_party, io.get(), &pool, m_size, op, x_share[i], x_cips[i]);
         tiny.extract_first_12_shares(lut_input_bool_first[i], x_bool);
         tiny.extract_last_12_shares(lut_input_bool_last[i], x_bool); 
     }
@@ -148,7 +148,7 @@ int main(int argc, char** argv) {
     std::vector<Plaintext> X_H(x_size);
     std::vector<std::vector<Ciphertext>> X_H_cips(x_size, std::vector<Ciphertext>(num_party));
     for (int i = 0; i < x_size; ++i) {
-        auto [plain, cips] = B2L::B2L(elgl.get(), lvt_bit.get(), tiny, party, num_party, io.get(), &pool, lut_input_bool_first[i], tb_size);
+        auto [plain, cips] = B2L::B2L(elgl.get(), lvt_bit.get(), tiny, party, num_party, io.get(), &pool, lut_input_bool_first[i], nd);
         X_H[i] = plain; X_H_cips[i] = cips;
     }
     vector<uint64_t> x_l(x_size);

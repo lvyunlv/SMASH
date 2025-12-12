@@ -33,11 +33,11 @@ inline tuple<Plaintext, vector<Ciphertext>> B2L(ELGL<MultiIOBase>* elgl, LVT<Mul
     vector<Ciphertext> x_cipher(l), r_cipher(l);
     vector<Plaintext> x_plain(l), r_plain(l);
     vector<uint8_t> rr(l);
+    vector<uint8_t> xx(l);
     vector<Plaintext> plain_i(l);
     for (int i = 0; i < l; ++i) {
         plain_i[i].assign(std::to_string(r_bits[i].value));
         r_cipher[i] = lvt->global_pk.encrypt(plain_i[i]);
-        rr[i] = r_plain[i].get_message().getUint64() % 2;
     }
     auto out1 = lvt->lookup_online_batch_(plain_i);
     for (int i = 0; i < l; ++i) {
@@ -45,14 +45,13 @@ inline tuple<Plaintext, vector<Ciphertext>> B2L(ELGL<MultiIOBase>* elgl, LVT<Mul
         rr[i] = r_plain[i].get_message().getUint64() % 2;
     }
 
-    vector<uint8_t> xx(l);
     for (int i = 0; i < l; ++i) {
-        Plaintext plain_i;
-        vector<Ciphertext> x_lut_ciphers(num_party);
-        plain_i.assign(std::to_string(x_bits[i].value));
-        x_cipher[i] = lvt->global_pk.encrypt(plain_i);
-        auto out1 = lvt->lookup_online_easy(plain_i);
-        x_plain[i] = out1;
+        plain_i[i].assign(std::to_string(x_bits[i].value));
+        x_cipher[i] = lvt->global_pk.encrypt(plain_i[i]);
+    }
+    auto out10 = lvt->lookup_online_batch_(plain_i);
+    for (int i = 0; i < l; ++i) {
+        x_plain[i] = out10[i];
         xx[i] = x_plain[i].get_message().getUint64() % 2;
     }
 
@@ -115,25 +114,25 @@ inline tuple<Plaintext, vector<Ciphertext>> B2L_for_L2B(
     vector<Ciphertext> x_cipher(l), r_cipher(l);
     vector<Plaintext> x_plain(l), r_plain(l);
     vector<uint8_t> rr(l);
-    
+    vector<uint8_t> xx(l);
+    vector<Plaintext> plain_i(l);
     for (int i = 0; i < l; ++i) {
-        Plaintext plain_i;
-        vector<Ciphertext> r_lut_ciphers(num_party);
-        plain_i.assign(std::to_string(r_bits[i].value));
-        r_cipher[i] = lvt->global_pk.encrypt(plain_i);
-        auto out1 = lvt->lookup_online_easy(plain_i);
-        r_plain[i] = out1;
+        plain_i[i].assign(std::to_string(r_bits[i].value));
+        r_cipher[i] = lvt->global_pk.encrypt(plain_i[i]);
+    }
+    auto out1 = lvt->lookup_online_batch_(plain_i);
+    for (int i = 0; i < l; ++i) {
+        r_plain[i] = out1[i];
         rr[i] = r_plain[i].get_message().getUint64() % 2;
     }
-    
-    vector<uint8_t> xx(l);
+
     for (int i = 0; i < l; ++i) {
-        Plaintext plain_i;
-        vector<Ciphertext> x_lut_ciphers(num_party);
-        plain_i.assign(std::to_string(x_bits[i].value));
-        x_cipher[i] = lvt->global_pk.encrypt(plain_i);
-        auto out1 = lvt->lookup_online_easy(plain_i);
-        x_plain[i] = out1;
+        plain_i[i].assign(std::to_string(x_bits[i].value));
+        x_cipher[i] = lvt->global_pk.encrypt(plain_i[i]);
+    }
+    auto out10 = lvt->lookup_online_batch_(plain_i);
+    for (int i = 0; i < l; ++i) {
+        x_plain[i] = out10[i];
         xx[i] = x_plain[i].get_message().getUint64() % 2;
     }
 

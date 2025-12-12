@@ -8,10 +8,10 @@ using namespace emp;
 int party, port;
 const static int threads = 32;
 int num_party;
-int m_bits = 22; 
-int m_size = 1 << m_bits; 
+int op = 22; 
+int m_size = 1 << op; 
 int num = 22;
-int tb_size = 1ULL << num; 
+int nd = 1ULL << num; 
 
 int main(int argc, char** argv) {
     BLS12381Element::init();
@@ -30,7 +30,7 @@ int main(int argc, char** argv) {
         for (int i = 0; i < num_party; ++i) {
             char* c = (char*)malloc(15 * sizeof(char));
             uint p;
-            fscanf(f, "%s %d\tb_size", c, &p);
+            fscanf(f, "%s %d", c, &p);
             net_config.push_back(std::make_pair(std::string(c), p));
             fflush(f);
         }
@@ -48,7 +48,7 @@ int main(int argc, char** argv) {
     std::unique_ptr<LVT<MultiIOBase>> lvt;
     LVT<MultiIOBase>* lvt_raw = nullptr;
 
-    LVT<MultiIOBase>::initialize(func_name, lvt_raw, num_party, party, io.get(), &pool, elgl.get(), alpha_fr, num, m_bits);
+    LVT<MultiIOBase>::initialize(func_name, lvt_raw, num_party, party, io.get(), &pool, elgl.get(), alpha_fr, num, op);
     lvt.reset(lvt_raw);
 
     mpz_class fd = m_size;
@@ -70,9 +70,9 @@ int main(int argc, char** argv) {
                 Plaintext x;
                 x.assign(xval_int);
                 x_share.push_back(x);
-                if (x.get_message().getUint64() > (1ULL << m_bits) - 1) {
+                if (x.get_message().getUint64() > (1ULL << op) - 1) {
                     std::cerr << "Error: input value exceeds table size in Party: " << party << std::endl;
-                    cout << "Error value: " << x.get_message().getUint64() << ", tb_size = " << (1ULL << m_bits) << endl;
+                    cout << "Error value: " << x.get_message().getUint64() << ", nd = " << (1ULL << op) << endl;
                     return 1;
                 }
             }
@@ -85,9 +85,9 @@ int main(int argc, char** argv) {
                 Plaintext x;
                 x.assign("0");
                 x_share.push_back(x);
-                if (x.get_message().getUint64() > (1ULL << m_bits) - 1) {
+                if (x.get_message().getUint64() > (1ULL << op) - 1) {
                     std::cerr << "Error: input value exceeds table size in Party: " << party << std::endl;
-                    cout << "Error value: " << x.get_message().getUint64() << ", tb_size = " << (1ULL << m_bits) << endl;
+                    cout << "Error value: " << x.get_message().getUint64() << ", nd = " << (1ULL << op) << endl;
                     return 1;
                 }
             }
@@ -106,7 +106,7 @@ int main(int argc, char** argv) {
             }
         }
     }
-    Plaintext tb_field = Plaintext(tb_size);
+    Plaintext tb_field = Plaintext(nd);
     Plaintext value_field = Plaintext(m_size);
 
     for (int i = 0; i < x_size; ++i) {

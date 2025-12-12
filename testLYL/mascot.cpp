@@ -12,13 +12,11 @@
 using namespace emp;
 using namespace std;
 
-// Test constants
 int party, port;
-const static int threads = 8;
+const static int threads = 32;
 int num_party;
 const mcl::Vint FIELD_SIZE("52435875175126190479447740508185965837690552500527637822603658699938581184512");
-// const int FIELD_SIZE = 1000000007; // A prime number for modular arithmetic
-int m_bits = 32; // bits of message
+int op = 32; 
 
 int main(int argc, char** argv) {
 
@@ -49,7 +47,7 @@ int main(int argc, char** argv) {
     alpha.assign(alpha_vint.getStr());
     // std::cout << "alpha: " << alpha.get_message().getStr() << std::endl;
     Fr alpha_fr = alpha.get_message();
-    LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party, party, io, &pool, elgl, "init", alpha_fr, num, m_bits);
+    LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party, party, io, &pool, elgl, "init", alpha_fr, num, op);
 
     lvt->DistKeyGen(1);
 

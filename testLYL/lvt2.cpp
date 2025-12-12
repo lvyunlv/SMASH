@@ -9,9 +9,9 @@ namespace fs = std::experimental::filesystem;
 int party, port;
 const static int threads = 32;
 int num_party;
-int m_bits = 1; 
+int op = 1; 
 int num = 1;
-int tb_size = 1ULL << num;
+int nd = 1ULL << num;
 
 int main(int argc, char** argv) {
     BLS12381Element::init();
@@ -29,7 +29,7 @@ int main(int argc, char** argv) {
         for (int i = 0; i < num_party; ++i) {
             char* c = (char*)malloc(15 * sizeof(char));
             uint p;
-            fscanf(f, "%s %d\tb_size", c, &p);
+            fscanf(f, "%s %d", c, &p);
             net_config.push_back(std::make_pair(std::string(c), p));
             fflush(f);
         }
@@ -45,7 +45,7 @@ int main(int argc, char** argv) {
     ELGL<MultiIOBase>* elgl = new ELGL<MultiIOBase>(num_party, io, &pool, party);
     Fr alpha_fr = alpha_init(num);
     std::string tablefile = "../bin/table_2.txt";
-    emp::LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party, party, io, &pool, elgl, tablefile, alpha_fr, num, m_bits);
+    emp::LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party, party, io, &pool, elgl, tablefile, alpha_fr, num, op);
     lvt->DistKeyGen(1);
     lvt->generate_shares(lvt->lut_share, lvt->rotation, lvt->table);
 
@@ -58,9 +58,9 @@ int main(int argc, char** argv) {
             Plaintext x;
             x.assign(line);
             x_share.push_back(x);
-            if (x.get_message().getUint64() > (1ULL << m_bits) - 1) {
+            if (x.get_message().getUint64() > (1ULL << op) - 1) {
                 std::cerr << "Error: input value exceeds table size in Party: " << party << std::endl;
-                cout << "Error value: " << x.get_message().getUint64() << ", tb_size = " << (1ULL << m_bits) << endl;
+                cout << "Error value: " << x.get_message().getUint64() << ", nd = " << (1ULL << op) << endl;
                 return 1;
             }
         }

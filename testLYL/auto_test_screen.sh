@@ -37,7 +37,7 @@ run_protocol_test() {
         echo "Creating screen session: $session_name"
         
         screen -dmS $session_name bash -c "
-            cd /workspace/lyl/SMASH/bin
+            cd /workspace/lyl/SMASH/build/bin
             echo 'Starting $program Party $party_id...'
             ./$program $party_id $BASE_PORT $num_parties
             echo 'Party $party_id completed. Press Enter to close...'

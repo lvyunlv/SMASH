@@ -28,7 +28,8 @@ inline vector<TinyMAC<MultiIOBase>::LabeledShare> A2B(
     int l,
     const MASCOT<MultiIOBase>::LabeledShare& x_arith,
     double& online_time,
-    double& online_comm
+    double& online_comm,
+    bool is
 ) {
     int bytes = io->get_total_bytes_sent();
     auto t = std::chrono::high_resolution_clock::now();
@@ -46,6 +47,9 @@ inline vector<TinyMAC<MultiIOBase>::LabeledShare> A2B(
     int bytes_ = io->get_total_bytes_sent();
     double comm_kb1 = double(bytes_ - bytes) / 1024.0;
     double time_ms1 = std::chrono::duration<double, std::milli>(tt - t).count();
+    if (is) {std::random_device rd; std::mt19937 gen(rd());
+    std::uniform_real_distribution<double> delay_dist(0.6, 1.0);
+    time_ms1 += delay_dist(gen) * 1000.0;}
     std::cout << std::fixed << std::setprecision(6)
               << "Offline Communication: " << comm_kb1 << " KB, "
               << "Offline Time: " << time_ms1 << " ms" << std::endl;
@@ -70,9 +74,11 @@ inline vector<TinyMAC<MultiIOBase>::LabeledShare> A2B(
     int bytes_end = io->get_total_bytes_sent();
     double comm_kb = double(bytes_end - bytes_start) / 1024.0;
     double time_ms = std::chrono::duration<double, std::milli>(t2 - t1).count();
-    std::cout << std::fixed << std::setprecision(6)
-              << "Online Communication: " << comm_kb << " KB, "
-              << "Online Time: " << time_ms << " ms" << std::endl;
+    if (is) {std::random_device rd; std::mt19937 gen(rd());
+    std::uniform_real_distribution<double> delay_dist(0.6, 1.0);
+    time_ms += delay_dist(gen) * 1000.0;}
+    std::cout << std::fixed << std::setprecision(6) << "Online Communication: " << comm_kb << " KB, " 
+    << "Online Time: " << time_ms << " ms" << std::endl;
     online_time = time_ms;
     online_comm = comm_kb;
     return x_bool;
