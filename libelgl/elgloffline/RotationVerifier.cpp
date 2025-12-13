@@ -56,7 +56,7 @@ void RotationVerifier::NIZKPoK(std::vector<BLS12381Element> &dx, std::vector<BLS
         z[1].setHashof(tmp_pack.str().c_str(), tmp_pack.str().size());
         z[2].setHashof(tmp_pack.str().c_str(), tmp_pack.str().size());
         std::vector<Plaintext> yk(P.n_tilde);
-        BLS12381Element L, R;int n_tilde=32;Plaintext tmp;
+        BLS12381Element L, R; Plaintext tmp;
         std::vector<std::future<void> >futures;
         futures.reserve(P.n_tilde);
         for (size_t i = 0; i < P.n_tilde; i++){
@@ -76,7 +76,7 @@ void RotationVerifier::NIZKPoK(std::vector<BLS12381Element> &dx, std::vector<BLS
             future.get();
         }
         futures.clear();
-        for (size_t i=0; i<n_tilde; i++) {
+        for (size_t i=0; i<P.n_tilde; i++) {
             futures.push_back(pool->enqueue([&, i]() {
                 Plaintext tmp;
                 BLS12381Element local_L, local_R;

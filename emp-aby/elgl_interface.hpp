@@ -84,8 +84,6 @@ namespace emp {
 
     inline void nt(const std::string& condition) {
         if (condition == "local") {
-            // 10 Gbps, 0.1ms
-            network_simulator = std::make_unique<NetworkSimulator>(0.1, 10 * 1000 * 1000);
         } else if (condition == "lan") {
             // 1 Gbps, 0.1ms
             network_simulator = std::make_unique<NetworkSimulator>(0.1, 1 * 1000 * 1000);
@@ -98,12 +96,8 @@ namespace emp {
         }
     }
     inline void nta() {
-        network_simulator = std::make_unique<NetworkSimulator>(0.1, 1 * 1000 * 1000);
+        network_simulator.reset();
     }
-    inline void ntw() {
-        network_simulator = std::make_unique<NetworkSimulator>(100, 200 * 1000);
-    }
-    
 
     inline void simulate_network_transfer(size_t bytes) {
         if (network_simulator) network_simulator->simulate(bytes);

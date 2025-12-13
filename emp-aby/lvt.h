@@ -26,7 +26,7 @@
     namespace fs = std::experimental::filesystem;
 #endif
 
-const int thread_num = 8;
+const int thread_num = 32;
 // #include "cmath"
 // #include <poll.h>
 
@@ -118,7 +118,7 @@ class LVT{
     vector<vector<BLS12381Element>> cip_lut;
     emp::BSGSPrecomputation bsgs;
     std::map<std::string, Fr> P_to_m;
-    BLS12381Element g;
+    BLS12381Element g = BLS12381Element::generator();
     
     int num_party;
     int party;
@@ -371,24 +371,6 @@ void LVT<IO>::initialize_batch(std::string func_name, LVT<IO>*& lvt_ptr_ref, int
     // }
 }
 
-void build_safe_P_to_m(std::map<std::string, Fr>& P_to_m, int num_party, size_t ad) {
-    size_t max_exponent = 2 * ad * num_party;
-    if (max_exponent <= 1<<8) {
-        for (size_t i = 0; i <= max_exponent; ++i) {
-            BLS12381Element g_i(i);
-            P_to_m[g_i.getPoint().getStr()] = Fr(to_string(i));
-        }
-        return;
-    }
-    const char* filename = "P_to_m_table.bin";
-    for (size_t i = 0; i <= 1UL << 18; ++i) {
-        BLS12381Element g_i(i);
-        g_i.getPoint().normalize();
-        P_to_m[g_i.getPoint().getStr()] = Fr(i);
-    }
-    serialize_P_to_m(P_to_m, filename);
-}
-
 template <typename IO>
 LVT<IO>::LVT(int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, ELGL<IO>* elgl, string func_name, Fr& alpha, int se, int da)
     : LVT(num_party, party, io, pool, elgl, alpha, se, da) {
@@ -396,7 +378,7 @@ LVT<IO>::LVT(int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, EL
     std::string tableFile = "../bin/table_" + func_name + ".txt";
     std::string table_cache = "../cache/table_" + func_name + "_" + std::to_string(se) + ".bin";
     std::string p_to_m_cache = "../cache/p_to_m_" + std::to_string(da) + ".bin";
-    std::string bsgs_cache = "../cache/bsgs_32.bin";
+    std::string bsgs_cache = "../cache/bsgs_40.bin";
     if (fs::exists(table_cache)) {
         std::ifstream in(table_cache, std::ios::binary);
         if (!in) throw std::runtime_error("Failed to open table cache");
@@ -416,7 +398,11 @@ LVT<IO>::LVT(int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, EL
         out.write(reinterpret_cast<const char*>(table.data()), size * sizeof(int64_t));
         out.close();
     }
-    if (da <= 14) {
+    if (2 * su * num_party <= 256) {
+        build_safe_P_to_m(P_to_m, 2 * su * num_party);
+        return;
+    }
+    // if (da <= 16) {
         if (fs::exists(p_to_m_cache)) {
             std::ifstream in(p_to_m_cache, std::ios::binary);
             if (!in) throw std::runtime_error("Failed to open P_to_m cache");
@@ -435,7 +421,7 @@ LVT<IO>::LVT(int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, EL
             }
             in.close();
         } else {
-            build_safe_P_to_m(P_to_m, num_party, ad);
+            build_safe_P_to_m(P_to_m, 2 * su * num_party);
             std::ofstream out(p_to_m_cache, std::ios::binary);
             if (!out) throw std::runtime_error("Failed to create P_to_m cache");
             
@@ -450,17 +436,17 @@ LVT<IO>::LVT(int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, EL
             }
             out.close();
         }
-    }
+    // }
     uint64_t N = 1ULL << 32;
     if (fs::exists(bsgs_cache)) {
         try {
             bsgs.deserialize(bsgs_cache.c_str());
         } catch (const std::exception& e) {
-            bsgs.precompute(g, N);
+            bsgs.precompute(BLS12381Element::generator(), N);
             bsgs.serialize(bsgs_cache.c_str());
         }
     } else {
-        bsgs.precompute(g, N);
+        bsgs.precompute(BLS12381Element::generator(), N);
         bsgs.serialize(bsgs_cache.c_str());
     }
 }
@@ -531,7 +517,6 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
         encMap_dec << base64_decode(encMap_b64);
         elgl->DecVerify(global_pk, comm_dec, response_dec, encMap_dec, c0, c1, su, pool);
     }
-
     vector<BLS12381Element> ak;
     vector<BLS12381Element> bk;
     vector<BLS12381Element> dk;
@@ -704,6 +689,7 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
         f.get();
     }
     res.clear();
+
     if (party == ALICE) {
         vector<Plaintext> y_alice;
         vector<BLS12381Element> L;
@@ -741,6 +727,7 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
             }
             cip_lut[i-1] = y3;
         }
+
         for (size_t i = 0; i < su; i++){
             res.push_back(pool->enqueue([&c1_, &l_alice, i]() {
                 l_alice[i] += c1_[i];
@@ -753,42 +740,66 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
         cip_lut[0].resize(su);
         bool flag = 0; 
         if(ad <= 131072) flag = 1;
-        for (size_t i = 0; i < su; i++){
-             res.push_back(pool->enqueue([this, &l_alice, &c0_, &lut_share, &L, i, flag]() {
-                BLS12381Element Y = l_alice[i] - c0_[i] * elgl->kp.get_sk().get_sk(); 
-                Y.getPoint().normalize();
-                Fr y; 
-                if(flag) {
+        if(flag){
+            BLS12381Element pk_tmp = this->global_pk.get_pk() * this->elgl->kp.get_sk().get_sk();
+            for (size_t i = 0; i < su; i++){
+                res.push_back(pool->enqueue([this, &l_alice, &c0_, &lut_share, &L, i, &pk_tmp]() {
+                    BLS12381Element Y = l_alice[i] - c0_[i] * elgl->kp.get_sk().get_sk(); Fr y; 
                     auto it = this->P_to_m.find(Y.getPoint().getStr());
-                    // if (it == this->P_to_m.end()) {
-                    //     std::cerr << "[Error] y not found in P_to_m! y = " << Y.getPoint().getStr() << std::endl;
-                    //     exit(1);
-                    // } else {
-                    //     y = it->second;
-                    // }
-                } else 
-                {   
-                    cout << "solve_parallel_with_pool: " << i << endl;
-                    y = this->bsgs.solve_parallel_with_pool(Y, this->pool, thread_num);
-                }
-                mcl::Vint r_;
-                mcl::Vint y_;
-                y_ = y.getMpz();
-                mcl::Vint ms;  
-                ms.setStr(to_string(this->ad));
-                mcl::gmp::mod(r_, y_, ms);
-                Fr r;
-                r.setMpz(r_);
-                lut_share[i].set_message(r);
-                BLS12381Element l(r);
-                l += c0_[i] * this->elgl->kp.get_sk().get_sk();
-                L[i] = BLS12381Element(l);
-                BLS12381Element pk_tmp = this->global_pk.get_pk();
-                this->cip_lut[0][i] = BLS12381Element(r) + pk_tmp * this->elgl->kp.get_sk().get_sk();
-            }));
+                    if (it == this->P_to_m.end()) {
+                        std::cerr << "[Error] y not found in P_to_m! y = " << Y.getPoint().getStr() << std::endl;
+                        exit(1);
+                    } else {
+                        y = it->second;
+                    }
+                    mcl::Vint r_;
+                    mcl::Vint y_;
+                    y_ = y.getMpz();
+                    mcl::Vint ms;  
+                    ms.setStr(to_string(this->ad));
+                    mcl::gmp::mod(r_, y_, ms);
+                    Fr r;
+                    r.setMpz(r_);
+                    lut_share[i].set_message(r);
+                    BLS12381Element l(r);
+                    l += c0_[i] * this->elgl->kp.get_sk().get_sk();
+                    L[i] = BLS12381Element(l);
+                    this->cip_lut[0][i] = BLS12381Element(r) + pk_tmp;
+                }));
+            }
+            for (auto& f : res) f.get();
+            res.clear();
+        } else {
+            vector<BLS12381Element> Ys(su);
+            for (size_t i = 0; i < su; i++){
+                res.push_back(pool->enqueue([this, &l_alice, &c0_, &lut_share, &L, i, &Ys]() {
+                    Ys[i] = l_alice[i] - c0_[i] * elgl->kp.get_sk().get_sk(); 
+                }));
+            }
+            for (auto& f : res) f.get();
+            res.clear();
+            vector<int64_t> ys = this->bsgs.solve_parallel_with_pool_vector(Ys, this->pool, thread_num);
+            BLS12381Element pk_tmp = this->global_pk.get_pk() * this->elgl->kp.get_sk().get_sk();
+            for (size_t i = 0; i < su; i++){
+                res.push_back(pool->enqueue([this, &l_alice, &c0_, &lut_share, &L, i, &ys, &pk_tmp]() {
+                    mcl::Vint r_;
+                    int64_t y_i = ys[i];
+                    mpz_class y_; y_.setStr(std::to_string(y_i));
+                    mcl::Vint ms;  
+                    ms.setStr(to_string(this->ad));
+                    mcl::gmp::mod(r_, y_, ms);
+                    Fr r;
+                    r.setMpz(r_);
+                    lut_share[i].set_message(r);
+                    BLS12381Element l(r);
+                    l += c0_[i] * this->elgl->kp.get_sk().get_sk();
+                    L[i] = BLS12381Element(l);
+                    this->cip_lut[0][i] = BLS12381Element(r) + pk_tmp;
+                }));
+            }
+            for (auto& f : res) f.get();
+            res.clear();
         }
-        for (auto& f : res) f.get();
-        res.clear();
         std::stringstream commit_ss, response_ss;
         std::string commit_raw, response_raw;
         std::stringstream commit_b64_, response_b64_;
@@ -1890,7 +1901,6 @@ std::vector<Fr> thdcp_batch(std::vector<Ciphertext>& c_batch, ELGL<IO>* elgl, co
                     for (const auto& ask_i : ask_parts_batch[i]) {
                         pi_ask -= ask_i;
                     }
-                    pi_ask.getPoint().normalize();
                     std::string key = pi_ask.getPoint().getStr();
                     Fr y = 0;
                     results[i] = y;

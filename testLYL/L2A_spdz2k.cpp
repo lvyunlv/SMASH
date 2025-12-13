@@ -60,17 +60,8 @@ int main(int argc, char** argv){
     vector<Ciphertext> vec_cx(num_party);
     vec_cx[party-1] = cx;
     elgl->serialize_sendall(cx);
-    for(int i=1;i<=num_party;i++) if(i!=party){Ciphertext cx_i; elgl->deserialize_recv(cx_i,i); vec_cx[i-1]=cx_i;}
-    nt(nwc);
-
-    double total_time=0,total_comm=0,online_time=0,online_comm=0;
-    int times=1;
-    for(int i=0;i<times;i++){
-        auto shared_x = L2A_spdz2k::L2A(elgl,lvt,spdz2k,party,num_party,io,&pool,x,vec_cx,FIELD_SIZE,online_time,online_comm);
-        total_time+=online_time; total_comm+=online_comm;
-    }
-    // cout << "Average time: " << (total_time/times) << "ms && Average communication: " << (total_comm/times) << "KB" << endl;
-
+    for(int i=1;i<=num_party;i++) if(i!=party){Ciphertext cx_i; elgl->deserialize_recv(cx_i,i); vec_cx[i-1]=cx_i;}nt(nwc);
+    auto shared_x = L2A_spdz2k::L2A(elgl,lvt,spdz2k,party,num_party,io,&pool,x,vec_cx,FIELD_SIZE);
     delete elgl; delete io; delete lvt;
     return 0;
 }

@@ -38,7 +38,7 @@ size_t RotationProver::NIZKPoK(RotationProof& P, std::stringstream& ciphertexts,
     z[1].setHashof(tmp_pack.str().c_str(), tmp_pack.str().size());
     z[2].setHashof(tmp_pack.str().c_str(), tmp_pack.str().size());
     mk.resize(P.n_tilde);  tk.resize(P.n_tilde); uk.resize(P.n_tilde); vk.resize(P.n_tilde);
-    m_tilde_k.resize(P.n_tilde);int n_tilde=32;yk.resize(P.n_tilde);
+    m_tilde_k.resize(P.n_tilde); yk.resize(P.n_tilde);
     BLS12381Element M_k, C, CK_tmp; C = g;
     Plaintext exp_tmp;
     for (size_t i = 0; i < P.n_tilde; i++){
@@ -92,7 +92,7 @@ size_t RotationProver::NIZKPoK(RotationProof& P, std::stringstream& ciphertexts,
         t_star[i+1] += tk[i];betak *= beta;
     }
     vector<std::future<void>> futures2;
-    for (size_t i = 0; i < n_tilde; i++){
+    for (size_t i = 0; i < P.n_tilde; i++){
         futures2.push_back(pool->enqueue([&, i]() {
             Plaintext exp, exp_tmp;
             exp.assign(std::to_string(i));
@@ -103,8 +103,9 @@ size_t RotationProver::NIZKPoK(RotationProof& P, std::stringstream& ciphertexts,
             rou[i] = P.challenge * t_star[i];rou[i] += m_tilde_k[i];
         }));
     }
-    for (auto& f : futures2) f.get();futures2.clear();
-    for (size_t i = 0; i < n_tilde; i++) phi_sum += phi[i] * yk[i];
+    for (auto& f : futures2) f.get();
+    futures2.clear();
+    for (size_t i = 0; i < P.n_tilde; i++) phi_sum += phi[i] * yk[i];
     Plaintext eta = P.challenge * t_star[P.n_tilde];
     eta += m_tilde;
     sigma.pack(cleartexts);

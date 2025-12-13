@@ -29,9 +29,9 @@ struct BSGSPrecomputation {
     std::unordered_map<BLS12381Element, uint64_t, BLS12381ElementHash> baby_table;
 
     void precompute(const BLS12381Element& g_in, uint64_t N_in, uint32_t n_threads = 1);
-    int64_t solve_parallel_with_pool(const BLS12381Element& y, ThreadPool* pool, uint32_t n_threads = 4) const;
+    int64_t solve_parallel_with_pool(BLS12381Element& y, ThreadPool* pool, uint32_t n_threads = 4) const;
+    vector<int64_t> solve_parallel_with_pool_vector(vector<BLS12381Element> ys, ThreadPool* pool, uint32_t n_tasks) const;
 
-    // 序列化预计算数据
     void serialize(const char* filename) {
         std::ofstream outFile(filename, std::ios::binary);
         if (!outFile) {
@@ -71,7 +71,6 @@ struct BSGSPrecomputation {
         }
     }
 
-    // 反序列化预计算数据
     void deserialize(const char* filename) {
         std::ifstream inFile(filename, std::ios::binary);
         if (!inFile) {
@@ -140,7 +139,7 @@ void BSGSPrecomputation::precompute(const BLS12381Element& g_in, uint64_t N_in, 
     }
 }
 
-int64_t BSGSPrecomputation::solve_parallel_with_pool(const BLS12381Element& y, ThreadPool* pool, uint32_t n_tasks) const {
+int64_t BSGSPrecomputation::solve_parallel_with_pool(BLS12381Element& y, ThreadPool* pool, uint32_t n_tasks) const {
     if (n_tasks == 0) n_tasks = 1;
     using namespace std;
     
@@ -192,6 +191,64 @@ int64_t BSGSPrecomputation::solve_parallel_with_pool(const BLS12381Element& y, T
     if (result.load() >= 0) return result.load();
     throw std::runtime_error("BSGS solve_parallel_with_pool: no solution found");
 }
+
+vector<int64_t>
+BSGSPrecomputation::solve_parallel_with_pool_vector(
+    vector<BLS12381Element> ys,
+    ThreadPool* pool,
+    uint32_t n_tasks
+) const
+{
+    if (n_tasks == 0) n_tasks = 1;
+    const size_t M = ys.size();
+
+    vector<int64_t> results(M, -1);
+    std::atomic<bool> failed(false);
+
+    vector<std::future<void>> futures;
+
+    for (uint32_t task_id = 0; task_id < n_tasks; ++task_id) {
+        futures.emplace_back(
+            pool->enqueue([&, task_id]() {
+                using mcl::bn::Fr;
+
+                for (size_t idx = 0; idx < M; ++idx) {
+                    BLS12381Element giant = ys[idx];
+
+                    // giant = y + task_id * g_inv_n
+                    if (task_id > 0) {
+                        Fr shift;
+                        shift.setStr(std::to_string(task_id));
+                        giant = giant + g_inv_n * shift;
+                    }
+
+                    for (uint64_t i = task_id; i < n; i += n_tasks) {
+                        giant.point.normalize();
+                        auto it = baby_table.find(giant);
+                        if (it != baby_table.end()) {
+                            uint64_t m = i * n + it->second;
+                            if (m < N) {
+                                results[idx] = static_cast<int64_t>(m);
+                                break;
+                            }
+                        }
+                        giant = giant + g_inv_n * n_tasks;
+                    }
+                }
+            })
+        );
+    }
+
+    for (auto& f : futures) f.get();
+
+    for (auto v : results) {
+        if (v < 0)
+            throw std::runtime_error("BSGS batch solve: no solution found");
+    }
+
+    return results;
+}
+
 
 
 } // namespace emp

@@ -28,9 +28,7 @@ inline MASCOT<MultiIOBase>::LabeledShare L2A(
     ThreadPool* pool,
     const Plaintext& x_plain,
     const vector<Ciphertext>& vec_cx,
-    const mcl::Vint& fd,
-    double& online_time,
-    double& online_comm
+    const mcl::Vint& fd
 ) {
     int bytes = io->get_total_bytes_sent();
     auto t = std::chrono::high_resolution_clock::now();
@@ -38,7 +36,6 @@ inline MASCOT<MultiIOBase>::LabeledShare L2A(
     Fr fd_fr; 
     fd_fr.setStr(fd.getStr());
     BLS12381Element G_fd(fd_fr);
-
     mcl::Vint r_mascot; 
     r_mascot.setRand(fd);
     r_mascot %= fd; if (r_mascot < 0) r_mascot += fd;
@@ -49,7 +46,6 @@ inline MASCOT<MultiIOBase>::LabeledShare L2A(
     x_mascot.setStr(s.getStr());
     x_mascot %= fd; if (x_mascot < 0) x_mascot += fd;
     shared_x = mascot.distributed_share(x_mascot);
-
     Plaintext r;
     r.assign(r_mascot.getStr());
     Ciphertext cr, count;
@@ -75,12 +71,10 @@ inline MASCOT<MultiIOBase>::LabeledShare L2A(
     double comm_kb1 = double(bytes_ - bytes) / 1024.0;
     double time_ms1 = std::chrono::duration<double, std::milli>(tt - t).count();
     std::cout << std::fixed << std::setprecision(6)
-              << "Offline Communication: " << comm_kb1 << " KB, "
-              << "Offline Time: " << time_ms1 << " ms" << std::endl;
-    
+    << "Offline Communication: " << comm_kb1 << " KB, "
+    << "Offline Time: " << time_ms1 << " ms" << std::endl;
     int bytes_start = io->get_total_bytes_sent();
     auto t1 = std::chrono::high_resolution_clock::now();
-
     count += vec_cx[party - 1];
     for(int i = 1; i <= num_party; i++) {
         if(i != party) {
@@ -93,14 +87,11 @@ inline MASCOT<MultiIOBase>::LabeledShare L2A(
     shared_u = mascot.add(shared_x, shared_r);
     u_int = mascot.reconstruct(shared_u);
     u_int %= fd; if (u_int < 0) u_int += fd;
-
     Fr u_int_fr; 
     u_int_fr.setStr(u_int.getStr());
     BLS12381Element uu(u_int_fr);
-    
     for (int i = 0; i <= num_party * 2; i++) {
         if (u == uu) {
-
             auto t2 = std::chrono::high_resolution_clock::now();
             int bytes_end = io->get_total_bytes_sent();
             double comm_kb = double(bytes_end - bytes_start) / 1024.0;
@@ -108,17 +99,12 @@ inline MASCOT<MultiIOBase>::LabeledShare L2A(
             std::cout << std::fixed << std::setprecision(6)
                       << "Online Communication: " << comm_kb << " KB, "
                       << "Online Time: " << time_ms << " ms" << std::endl;
-
-            online_time = time_ms;
-            online_comm = comm_kb;
             return shared_x;
         }
         uu += G_fd;
     }
     throw std::runtime_error("L2A_mascot check failed: decrypted value != share sum");
-
 }
-
 
 inline MASCOT<MultiIOBase>::LabeledShare L2A_for_B2A(
     ELGL<MultiIOBase>* elgl,
@@ -136,7 +122,6 @@ inline MASCOT<MultiIOBase>::LabeledShare L2A_for_B2A(
     Fr fd_fr; 
     fd_fr.setStr(fd.getStr());
     BLS12381Element G_fd(fd_fr);
-
     mcl::Vint r_mascot; 
     r_mascot.setRand(fd);
     r_mascot %= fd; if (r_mascot < 0) r_mascot += fd;
@@ -147,13 +132,11 @@ inline MASCOT<MultiIOBase>::LabeledShare L2A_for_B2A(
     x_mascot.setStr(s.getStr());
     x_mascot %= fd; if (x_mascot < 0) x_mascot += fd;
     shared_x = mascot.distributed_share(x_mascot);
-
     Plaintext r;
     r.assign(r_mascot.getStr());
     Ciphertext cr, count;
     cr = lvt->global_pk.encrypt(r);
     elgl->serialize_sendall(cr);
-
     vector<Ciphertext> vec_cr(num_party);
     vec_cr[party - 1] = cr;
     for(int i = 1; i <= num_party; i++) {
@@ -163,17 +146,14 @@ inline MASCOT<MultiIOBase>::LabeledShare L2A_for_B2A(
             vec_cr[i - 1] = cr_i;
         }
     }
-
     count = cr;
     for(int i = 1; i <= num_party; i++) {
         if(i != party) {
             count += vec_cr[i - 1];
         }
     }
-
     vec_cx[party - 1] = lvt->global_pk.encrypt(x_plain);
     elgl->serialize_sendall(vec_cx[party - 1]);
-
     for(int i = 1; i <= num_party; i++) {
         if(i != party) {
             Ciphertext cx_i;
@@ -181,7 +161,6 @@ inline MASCOT<MultiIOBase>::LabeledShare L2A_for_B2A(
             vec_cx[i - 1] = cx_i;
         }
     }
-
     count += vec_cx[party - 1];
     for(int i = 1; i <= num_party; i++) {
         if(i != party) {
@@ -194,11 +173,9 @@ inline MASCOT<MultiIOBase>::LabeledShare L2A_for_B2A(
     shared_u = mascot.add(shared_x, shared_r);
     u_int = mascot.reconstruct(shared_u);
     u_int %= fd; if (u_int < 0) u_int += fd;
-
     Fr u_int_fr; 
     u_int_fr.setStr(u_int.getStr());
     BLS12381Element uu(u_int_fr);
-    
     for (int i = 0; i <= num_party * 2; i++) {
         if (u == uu) {
             return shared_x;

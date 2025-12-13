@@ -39,18 +39,15 @@ int main(int argc, char** argv){
     string tablefile="2";
     LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party,party,io,&pool,elgl,tablefile,alpha_fr,num,op);
     lvt->DistKeyGen(1);
-    for (int i = 0; i < l; ++i) lvt->generate_shares_(lvt->lut_share, lvt->rotation, lvt->table);
     TinyMAC<MultiIOBase> tiny(elgl);
     SPDZ2k<MultiIOBase> spdz2k(elgl);
     vector<TinyMAC<MultiIOBase>::LabeledShare> x_bits(l);
     for(int i=0;i<l;i++){x_bits[i]=tiny.distributed_share(tiny.rng()%2);}nt(nwc);
-    double total_time=0,total_comm=0,online_time=0,online_comm=0;
-    int times=1;
-    for(int i=0;i<times;i++){
-        auto shared_x = B2A_spdz2k::B2A(elgl,lvt,tiny,spdz2k,party,num_party,nwc,io,&pool,FIELD_SIZE,x_bits,online_time,online_comm);
-        total_time+=online_time; total_comm+=online_comm;
-    }
-    // cout << "Average time: " << (total_time/times) << "ms && Average communication: " << (total_comm/times) << "KB" << endl;
+    int comm = io->get_total_bytes_sent();
+    auto time = std::chrono::high_resolution_clock::now();
+    lvt->generate_shares(lvt->lut_share, lvt->rotation, lvt->table);nta();
+    for (int i=1;i<l;++i) lvt->generate_shares(lvt->lut_share, lvt->rotation, lvt->table);
+    auto shared_x = B2A_spdz2k::B2A(elgl,lvt,tiny,spdz2k,party,num_party,nwc,io,&pool,FIELD_SIZE,x_bits,time,comm);
     delete elgl; delete io; delete lvt;
     return 0;
 }

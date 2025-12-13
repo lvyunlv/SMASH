@@ -66,21 +66,17 @@ int main(int argc, char** argv) {
     Fr alpha_fr = alpha_init(op);
     std::string tablefile = "2";
     emp::LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party, party, io, &pool, elgl, tablefile, alpha_fr, op, kl);
-    lvt->DistKeyGen(1);
-    for (int i = 0; i < su; ++i) lvt->generate_shares_(lvt->lut_share, lvt->rotation, lvt->table);
+    lvt->DistKeyGen(1); 
     TinyMAC<MultiIOBase> tiny(elgl);
     MASCOT<MultiIOBase> mascot(elgl);
     mcl::Vint x_mascot;
     x_mascot.setRand(FIELD_SIZE); 
-    MASCOT<MultiIOBase>::LabeledShare x_arith = mascot.distributed_share(x_mascot);
-    nt(nwc); double total_time = 0, total_comm = 0, online_time = 0, online_comm = 0;
-    int times = 1;
-    for (int i = 0; i < times; ++i) {
-        auto x_bool = A2B_mascot::A2B(elgl, lvt, tiny, mascot, party, num_party, nwc, io, &pool, FIELD_SIZE, su, x_arith, online_time, online_comm);
-        total_time += online_time;
-        total_comm += online_comm;
-    }
-    // std::cout << "Average time: " << (total_time/times) << "ms && Average communication: " << (total_comm/times) << "KB" << std::endl;
+    MASCOT<MultiIOBase>::LabeledShare x_arith = mascot.distributed_share(x_mascot);nt(nwc); 
+    int comm = io->get_total_bytes_sent();
+    auto time = std::chrono::high_resolution_clock::now();
+    lvt->generate_shares(lvt->lut_share, lvt->rotation, lvt->table);nta();
+    for(int i=1; i<su; i++) lvt->generate_shares(lvt->lut_share, lvt->rotation, lvt->table);
+    auto x_bool = A2B_mascot::A2B(elgl, lvt, tiny, mascot, party, num_party, nwc, io, &pool, FIELD_SIZE, su, x_arith, time, comm);
     delete lvt;
     delete elgl;
     delete io;

@@ -64,7 +64,6 @@ void ExpVerifier::NIZKPoK(BLS12381Element& g1, BLS12381Element& y1, BLS12381Elem
         ciphertexts.seekg(0);
         cleartexts.seekg(0);
         y2.unpack(ciphertexts);
-        Fr challenge = P.challenge.get_message();
         std::stringstream hashbuf;
         y2.pack(hashbuf);
         std::string hash_input = hashbuf.str();

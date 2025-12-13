@@ -58,19 +58,15 @@ int main(int argc, char** argv) {
     string tablefile = "2";
     LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party, party, io, &pool, elgl, tablefile, alpha_fr, num, op);
     lvt->DistKeyGen(1);
-    for (int i = 0; i < l; ++i) lvt->generate_shares_(lvt->lut_share, lvt->rotation, lvt->table);
     TinyMAC<MultiIOBase> tiny(elgl);
     SPDZ2k<MultiIOBase> spdz2k(elgl);
     uint64_t x_spdz2k = spdz2k.rng() % FIELD_SIZE;
-    SPDZ2k<MultiIOBase>::LabeledShare x_arith = spdz2k.distributed_share(x_spdz2k);
-    nt(nwc); double total_time = 0, total_comm = 0, online_time = 0, online_comm = 0;
-    int times = 1;
-    for(int i=0;i<times;i++){
-        auto x_bool = A2B_spdz2k::A2B(elgl, lvt, tiny, spdz2k, party, num_party, nwc, io, &pool, FIELD_SIZE, l, x_arith, online_time, online_comm);
-        total_time += online_time;
-        total_comm += online_comm;
-    }
-    // cout << "Average time: " << (total_time/times) << "ms && Average communication: " << (total_comm/times) << "KB" << endl;
+    SPDZ2k<MultiIOBase>::LabeledShare x_arith = spdz2k.distributed_share(x_spdz2k);nt(nwc); 
+    int comm = io->get_total_bytes_sent();
+    auto time = std::chrono::high_resolution_clock::now();
+    lvt->generate_shares(lvt->lut_share, lvt->rotation, lvt->table);nta();
+    for (int i=1; i<l; ++i) lvt->generate_shares(lvt->lut_share, lvt->rotation, lvt->table);
+    auto x_bool = A2B_spdz2k::A2B(elgl, lvt, tiny, spdz2k, party, num_party, nwc, io, &pool, FIELD_SIZE, l, x_arith, time, comm);
     delete elgl; delete io; delete lvt;
     return 0;
 }

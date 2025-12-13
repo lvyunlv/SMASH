@@ -29,11 +29,9 @@ inline MASCOT<MultiIOBase>::LabeledShare B2A(
     ThreadPool* pool,
     const mcl::Vint& FIELD_SIZE,
     const vector<TinyMAC<MultiIOBase>::LabeledShare>& x_bits,
-    double& online_time,
-    double& online_comm
+    std::chrono::_V2::system_clock::time_point& t,
+    int& bytes
 ) {
-    int bytes = io->get_total_bytes_sent();
-    auto t = std::chrono::high_resolution_clock::now();
     int l = x_bits.size();
     vector<MASCOT<MultiIOBase>::LabeledShare> shared_x(l); 
     vector<TinyMAC<MultiIOBase>::LabeledShare> r_bits(l), u_bits(l);
@@ -41,9 +39,9 @@ inline MASCOT<MultiIOBase>::LabeledShare B2A(
     std::mt19937 gen(rd());
     std::uniform_int_distribution<int> bit_dis(0, 1);
     r_bits[0] = tiny.distributed_share(bit_dis(gen));
-    for (int i = 1; i < l; ++i) {nta();r_bits[i] = tiny.distributed_share(bit_dis(gen));}
+    for (int i = 1; i < l; ++i) {r_bits[i] = tiny.distributed_share(bit_dis(gen));}
     vector<MASCOT<MultiIOBase>::LabeledShare> shared_r(l);
-    shared_x.resize(l);nt(nw);
+    shared_x.resize(l);
     vector<Ciphertext> x_cipher(l), r_cipher(l), x_lut_ciphers(num_party);
     vector<Plaintext> x_plain(l), r_plain(l); 
     Plaintext plain_i;
@@ -67,15 +65,6 @@ inline MASCOT<MultiIOBase>::LabeledShare B2A(
         shared_r[i] = L2A_mascot::L2A_for_B2A(elgl, lvt, mascot, party, num_party, io, pool, r_plain[i], r_ciphers, FIELD_SIZE);
         if (shared_r[i].value == 0) shared_r[i].value = 0;
     } 
-    auto tt = std::chrono::high_resolution_clock::now();
-    int bytes_ = io->get_total_bytes_sent();
-    double comm_kb1 = double(bytes_ - bytes) / 1024.0;
-    double time_ms1 = std::chrono::duration<double, std::milli>(tt - t).count();
-    std::cout << std::fixed << std::setprecision(6)
-              << "Offline Communication: " << comm_kb1 << " KB, "
-              << "Offline Time: " << time_ms1 << " ms" << std::endl;
-    int bytes_start = io->get_total_bytes_sent();
-    auto t1 = std::chrono::high_resolution_clock::now();
     plain_i.assign(std::to_string(x_bits[0].value));
     x_cipher[0] = lvt->global_pk.encrypt(plain_i);
     vector<Ciphertext> x_ciphers;nt(nw);
@@ -93,18 +82,21 @@ inline MASCOT<MultiIOBase>::LabeledShare B2A(
         x_plain[i] = std::get<0>(result2);  
         auto lut_ciphers = std::get<1>(result2);  
     }nt(nw);
-    int skip_bytes_start = io->get_total_bytes_sent();
-    auto skip_t1 = std::chrono::high_resolution_clock::now();
     shared_x[0] = L2A_mascot::L2A_for_B2A(elgl, lvt, mascot, party, num_party, io, pool, x_plain[0], x_lut_ciphers, FIELD_SIZE);
     if (shared_x[0].value == 0) shared_x[0].value = 0;nta();
     for (int i = 1; i < l; i++) {
         shared_x[i] = L2A_mascot::L2A_for_B2A(elgl, lvt, mascot, party, num_party, io, pool, x_plain[i], x_lut_ciphers, FIELD_SIZE);
         if (shared_x[i].value == 0) shared_x[i].value = 0;
     }
-    int skip_bytes_end = io->get_total_bytes_sent();
-    auto skip_t2 = std::chrono::high_resolution_clock::now();
-    double skip_comm_kb = double(skip_bytes_end - skip_bytes_start) / 1024.0;
-    double skip_time_ms = std::chrono::duration<double, std::milli>(skip_t2 - skip_t1).count();
+    auto tt = std::chrono::high_resolution_clock::now();
+    int bytes_ = io->get_total_bytes_sent();
+    double comm_kb1 = double(bytes_ - bytes) / 1024.0;
+    double time_ms1 = std::chrono::duration<double, std::milli>(tt - t).count();
+    std::cout << std::fixed << std::setprecision(6)
+    << "Offline Communication: " << comm_kb1 << " KB, "
+    << "Offline Time: " << time_ms1 << " ms" << std::endl;
+    int bytes_start = io->get_total_bytes_sent();
+    auto t1 = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < l; ++i) u_bits[i] = tiny.add(x_bits[i], r_bits[i]);
     for (int i = 0; i < l; ++i) {
         auto mascot_u = mascot.add(shared_x[i], shared_r[i]);
@@ -134,15 +126,11 @@ inline MASCOT<MultiIOBase>::LabeledShare B2A(
     }
     int bytes_end = io->get_total_bytes_sent();
     auto t2 = std::chrono::high_resolution_clock::now();
-    double comm_kb = double(bytes_end - bytes_start) / 1024.0 - skip_comm_kb;
-    double time_ms = std::chrono::duration<double, std::milli>(t2 - t1).count() - skip_time_ms;
+    double comm_kb = double(bytes_end - bytes_start) / 1024.0;
+    double time_ms = std::chrono::duration<double, std::milli>(t2 - t1).count();
     std::cout << std::fixed << std::setprecision(6)
-              << "Online Communication: " << comm_kb << " KB, "
-              << "Online Time: " << time_ms << " ms" << std::endl;
-
-    online_time = time_ms;
-    online_comm = comm_kb;
-
+    << "Online Communication: " << comm_kb << " KB, "
+    << "Online Time: " << time_ms << " ms" << std::endl;
     return share_x_decimal; 
 }
 
@@ -167,17 +155,17 @@ inline MASCOT<MultiIOBase>::LabeledShare B2A_for_A2B(
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<int> bit_dis(0, 1);
-    r_bits[0] = tiny.distributed_share(bit_dis(gen));
-    for (int i = 1; i < l; ++i) {nta();r_bits[i] = tiny.distributed_share(bit_dis(gen));}
+    r_bits[0] = tiny.distributed_share(bit_dis(gen));nta();
+    for (int i = 1; i < l; ++i) r_bits[i] = tiny.distributed_share(bit_dis(gen));
     vector<MASCOT<MultiIOBase>::LabeledShare> shared_r(l);
-    shared_x.resize(l);nt(nw);
+    shared_x.resize(l);
     vector<Ciphertext> x_cipher(l), r_cipher(l), x_lut_ciphers(num_party);
     vector<Plaintext> x_plain(l), r_plain(l); 
     Plaintext plain_i;
     plain_i.assign(std::to_string(r_bits[0].value)); 
     r_cipher[0] = lvt->global_pk.encrypt(plain_i);
     vector<Ciphertext> r_ciphers;
-    r_ciphers.resize(num_party); 
+    r_ciphers.resize(num_party); nt(nw);
     auto result = lvt->lookup_online_(plain_i, r_cipher[0], r_ciphers);
     r_plain[0] = std::get<0>(result); nta(); r_ciphers = std::get<1>(result);  
     shared_r[0] = L2A_mascot::L2A_for_B2A(elgl, lvt, mascot, party, num_party, io, pool, r_plain[0], r_ciphers, FIELD_SIZE);
@@ -196,10 +184,10 @@ inline MASCOT<MultiIOBase>::LabeledShare B2A_for_A2B(
     } 
     plain_i.assign(std::to_string(x_bits[0].value));
     x_cipher[0] = lvt->global_pk.encrypt(plain_i);
-    vector<Ciphertext> x_ciphers;nt(nw);
+    vector<Ciphertext> x_ciphers;
     x_ciphers.resize(num_party);  
     auto result1 = lvt->lookup_online_(plain_i, x_cipher[0], x_ciphers);
-    x_plain[0] = std::get<0>(result1);nta();
+    x_plain[0] = std::get<0>(result1);
     auto lut_ciphers = std::get<1>(result1);  
     for (int i = 1; i < l; ++i) {
         Plaintext plain_i;

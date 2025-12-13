@@ -86,7 +86,6 @@ size_t ExpProver::NIZKPoK(ExpProof& P, std::stringstream& ciphertexts, std::stri
         v.pack(ciphertexts);  
 
         P.set_challenge(ciphertexts);
-        Fr challenge = P.challenge.get_message();
 
         Plaintext s;
         s = this->k[0];

@@ -299,24 +299,6 @@ void LVT<IO>::initialize(std::string func_name, LVT<IO>*& lvt_ptr_ref, int num_p
     }
 }
 
-void build_safe_P_to_m(std::map<std::string, Fr>& P_to_m, int num_party, size_t ad) {
-    size_t max_exponent = 2 * ad * num_party;
-    if (max_exponent <= 1<<8) {
-        for (size_t i = 0; i <= max_exponent; ++i) {
-            BLS12381Element g_i(i);
-            P_to_m[g_i.getPoint().getStr()] = Fr(to_string(i));
-        }
-        return;
-    }
-    const char* filename = "P_to_m_table.bin";
-    for (size_t i = 0; i <= 1UL << 18; ++i) {
-        BLS12381Element g_i(i);
-        g_i.getPoint().normalize();
-        P_to_m[g_i.getPoint().getStr()] = Fr(i);
-    }
-    serialize_P_to_m(P_to_m, filename);
-}
-
 template <typename IO>
 LVT<IO>::LVT(int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, ELGL<IO>* elgl, string func_name, Fr& alpha, int table_size, int m_bits)
     : LVT(num_party, party, io, pool, elgl, alpha, table_size, m_bits) {
@@ -344,7 +326,7 @@ LVT<IO>::LVT(int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, EL
         out.write(reinterpret_cast<const char*>(table.data()), size * sizeof(int64_t));
         out.close();
     }
-    if (m_bits <= 14) {
+    // if (m_bits <= 14) {
         if (fs::exists(p_to_m_cache)) {
             std::ifstream in(p_to_m_cache, std::ios::binary);
             if (!in) throw std::runtime_error("Failed to open P_to_m cache");
@@ -365,7 +347,7 @@ LVT<IO>::LVT(int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, EL
             }
             in.close();
         } else {
-            build_safe_P_to_m(P_to_m, num_party, ad);
+            build_safe_P_to_m(P_to_m, 2 * su * num_party);
             std::ofstream out(p_to_m_cache, std::ios::binary);
             if (!out) throw std::runtime_error("Failed to create P_to_m cache");
             
@@ -380,7 +362,7 @@ LVT<IO>::LVT(int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, EL
             }
             out.close();
         }
-    }
+    // }
     uint64_t N = 1ULL << 32;
     if (fs::exists(bsgs_cache)) {
         try {

@@ -33,15 +33,15 @@ const int thread_num = 8;
 
 namespace emp{
 
-void deserializeTable(vector<int64_t>& table, const char* filename, size_t table_size = 1<<16) {
+void deserializeTable(vector<int64_t>& table, const char* filename, size_t su = 1<<16) {
     ifstream inFile(filename, ios::binary);
     if (!inFile) {
         cerr << "Error: Unable to open file for reading.\n Error in 'file: " << filename << "'.";
         exit(1);
     }
 
-    table.resize(table_size);  // 预分配空间
-    inFile.read(reinterpret_cast<char*>(table.data()), table_size * sizeof(int64_t));
+    table.resize(su);  // 预分配空间
+    inFile.read(reinterpret_cast<char*>(table.data()), su * sizeof(int64_t));
 
     // 计算实际读取的元素个数
     size_t elementsRead = inFile.gcount() / sizeof(int64_t);
@@ -77,10 +77,10 @@ class LVT{
     int num_party;
     int party;
     vector<int64_t> table;
-    LVT(int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, ELGL<IO>* elgl, Fr& alpha, int table_size, int m_bits);
-    LVT(int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, ELGL<IO>* elgl, std::string tableFile, Fr& alpha, int table_size, int m_bits);
-    static void initialize(std::string name, LVT<IO>*& lvt_ptr_ref, int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, ELGL<IO>* elgl, Fr& alpha_fr, int table_size, int m_bits);
-    static void initialize_batch(std::string name, LVT<IO>*& lvt_ptr_ref, int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, ELGL<IO>* elgl, Fr& alpha_fr, int table_size, int m_bits);
+    LVT(int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, ELGL<IO>* elgl, Fr& alpha, int su, int da);
+    LVT(int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, ELGL<IO>* elgl, std::string tableFile, Fr& alpha, int su, int da);
+    static void initialize(std::string name, LVT<IO>*& lvt_ptr_ref, int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, ELGL<IO>* elgl, Fr& alpha_fr, int su, int da);
+    static void initialize_batch(std::string name, LVT<IO>*& lvt_ptr_ref, int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, ELGL<IO>* elgl, Fr& alpha_fr, int su, int da);
     ELGL_PK DistKeyGen(1);
     ~LVT();
     void generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation, vector<int64_t> table);
@@ -135,9 +135,9 @@ void LVT<IO>::save_full_state(const std::string& filename) {
     const Fr& sk_fr = elgl->kp.get_sk().get_sk();
     memcpy(ptr, &sk_fr, sizeof(Fr)); ptr += sizeof(Fr);
     
-    size_t table_size = table.size();
-    memcpy(ptr, &table_size, sizeof(size_t)); ptr += sizeof(size_t);
-    memcpy(ptr, table.data(), table_size * sizeof(int64_t)); ptr += table_size * sizeof(int64_t);
+    size_t su = table.size();
+    memcpy(ptr, &su, sizeof(size_t)); ptr += sizeof(size_t);
+    memcpy(ptr, table.data(), su * sizeof(int64_t)); ptr += su * sizeof(int64_t);
     
     for (int i = 0; i < num_party; ++i) {
         for (size_t j = 0; j < tb_size; ++j) {
@@ -208,10 +208,10 @@ void LVT<IO>::load_full_state(const std::string& filename) {
     key.sk = sk_fr;
     elgl->kp.sk = key;
     
-    size_t table_size;
-    memcpy(&table_size, ptr, sizeof(size_t)); ptr += sizeof(size_t);
-    table.resize(table_size);
-    memcpy(table.data(), ptr, table_size * sizeof(int64_t)); ptr += table_size * sizeof(int64_t);
+    size_t su;
+    memcpy(&su, ptr, sizeof(size_t)); ptr += sizeof(size_t);
+    table.resize(su);
+    memcpy(table.data(), ptr, su * sizeof(int64_t)); ptr += su * sizeof(int64_t);
 
     cip_lut.resize(num_party);
     for (int i = 0; i < num_party; ++i) {
@@ -267,7 +267,7 @@ void LVT<IO>::load_full_state(const std::string& filename) {
 
 
 template <typename IO>
-LVT<IO>::LVT(int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, ELGL<IO>* elgl, Fr& alpha, int table_size, int m_bits){
+LVT<IO>::LVT(int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, ELGL<IO>* elgl, Fr& alpha, int su, int da){
     this->io = io;
     this->party = party;
     this->num_party = num_party;
@@ -276,8 +276,8 @@ LVT<IO>::LVT(int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, EL
     this->elgl = elgl;
     this->user_pk.resize(num_party);
     this->user_pk[party-1] = elgl->kp.get_pk();
-    this->tb_size = 1ULL << table_size;
-    this->m_size = 1ULL << m_bits;
+    this->tb_size = 1ULL << su;
+    this->m_size = 1ULL << da;
     this->cip_lut.resize(num_party);
     this->cr_i.resize(num_party);
     this->lut_share.resize(tb_size);
@@ -288,10 +288,10 @@ LVT<IO>::LVT(int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, EL
 }
 
 template <typename IO>
-void LVT<IO>::initialize(std::string func_name, LVT<IO>*& lvt_ptr_ref, int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, ELGL<IO>* elgl, Fr& alpha_fr, int table_size, int m_bits) {
-    std::string full_state_path = "../cache/lvt_" + func_name + "_size" + std::to_string(table_size) + "-P" + std::to_string(party) + ".bin";
+void LVT<IO>::initialize(std::string func_name, LVT<IO>*& lvt_ptr_ref, int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, ELGL<IO>* elgl, Fr& alpha_fr, int su, int da) {
+    std::string full_state_path = "../cache/lvt_" + func_name + "_size" + std::to_string(su) + "-P" + std::to_string(party) + ".bin";
     fs::create_directories("../cache");
-    lvt_ptr_ref = new LVT<IO>(num_party, party, io, pool, elgl, func_name, alpha_fr, table_size, m_bits);
+    lvt_ptr_ref = new LVT<IO>(num_party, party, io, pool, elgl, func_name, alpha_fr, su, da);
     if (fs::exists(full_state_path)) {
         auto start = clock_start();
         lvt_ptr_ref->load_full_state(full_state_path);
@@ -307,10 +307,10 @@ void LVT<IO>::initialize(std::string func_name, LVT<IO>*& lvt_ptr_ref, int num_p
 }
 
 template <typename IO>
-void LVT<IO>::initialize_batch(std::string func_name, LVT<IO>*& lvt_ptr_ref, int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, ELGL<IO>* elgl, Fr& alpha_fr, int table_size, int m_bits) {
-    // std::string full_state_path = "../cache/lvt_batch_" + func_name + "_size" + std::to_string(table_size) + "-P" + std::to_string(party) + ".bin";
+void LVT<IO>::initialize_batch(std::string func_name, LVT<IO>*& lvt_ptr_ref, int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, ELGL<IO>* elgl, Fr& alpha_fr, int su, int da) {
+    // std::string full_state_path = "../cache/lvt_batch_" + func_name + "_size" + std::to_string(su) + "-P" + std::to_string(party) + ".bin";
     // fs::create_directories("../cache");
-    lvt_ptr_ref = new LVT<IO>(num_party, party, io, pool, elgl, func_name, alpha_fr, table_size, m_bits);
+    lvt_ptr_ref = new LVT<IO>(num_party, party, io, pool, elgl, func_name, alpha_fr, su, da);
     // if (fs::exists(full_state_path)) {
     //     auto start = clock_start();
     //     lvt_ptr_ref->load_full_state(full_state_path);
@@ -335,7 +335,7 @@ void build_safe_P_to_m(std::map<std::string, Fr>& P_to_m, int num_party, size_t 
         return;
     }
     const char* filename = "P_to_m_table.bin";
-    for (size_t i = 0; i <= 1UL << 18; ++i) {
+    for (size_t i = 0; i <= 1UL << 16; ++i) {
         BLS12381Element g_i(i);
         g_i.getPoint().normalize();
         P_to_m[g_i.getPoint().getStr()] = Fr(i);
@@ -344,12 +344,12 @@ void build_safe_P_to_m(std::map<std::string, Fr>& P_to_m, int num_party, size_t 
 }
 
 template <typename IO>
-LVT<IO>::LVT(int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, ELGL<IO>* elgl, string func_name, Fr& alpha, int table_size, int m_bits)
-    : LVT(num_party, party, io, pool, elgl, alpha, table_size, m_bits) {
+LVT<IO>::LVT(int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, ELGL<IO>* elgl, string func_name, Fr& alpha, int su, int da)
+    : LVT(num_party, party, io, pool, elgl, alpha, su, da) {
     fs::create_directories("../cache");
     std::string tableFile = "../bin/table_" + func_name + ".txt";
-    std::string table_cache = "../cache/table_" + func_name + "_" + std::to_string(table_size) + ".bin";
-    std::string p_to_m_cache = "../cache/p_to_m_" + std::to_string(m_bits) + ".bin";
+    std::string table_cache = "../cache/table_" + func_name + "_" + std::to_string(su) + ".bin";
+    std::string p_to_m_cache = "../cache/p_to_m_" + std::to_string(da) + ".bin";
     std::string bsgs_cache = "../cache/bsgs_32.bin";
     if (fs::exists(table_cache)) {
         std::ifstream in(table_cache, std::ios::binary);
@@ -370,7 +370,7 @@ LVT<IO>::LVT(int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, EL
         out.write(reinterpret_cast<const char*>(table.data()), size * sizeof(int64_t));
         out.close();
     }
-    if (m_bits <= 14) {
+    if (da <= 16) {
         if (fs::exists(p_to_m_cache)) {
             std::ifstream in(p_to_m_cache, std::ios::binary);
             if (!in) throw std::runtime_error("Failed to open P_to_m cache");
@@ -1788,8 +1788,8 @@ vector<BLS12381Element> thdcp__batch(
 
 }
 
-void serializeTable(vector<int64_t>& table, const char* filename, size_t table_size = 1<<16) {
-    if (table.size() > table_size) {
+void serializeTable(vector<int64_t>& table, const char* filename, size_t su = 1<<16) {
+    if (table.size() > su) {
         cerr << "Error: Table size exceeds the given limit.\n";
         return;
     }
