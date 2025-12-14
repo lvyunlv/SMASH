@@ -24,7 +24,13 @@ class ExpProver{
         const BLS12381Element& y1,
         const BLS12381Element& y2,
         const Plaintext& x, int i, ThreadPool* pool);
-    
+
+    size_t NIZKPoK_(ExpProof& P, std::stringstream& sendss,
+    const BLS12381Element& pk_tmp,
+    const vector<BLS12381Element>& a,
+    const vector<BLS12381Element>& ask,
+    const Plaintext& x, ThreadPool* pool);
+
     size_t report_size();
 
     // void report_size(MemoryUsage& res);

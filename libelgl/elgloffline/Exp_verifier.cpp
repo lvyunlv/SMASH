@@ -54,6 +54,37 @@ void ExpVerifier::NIZKPoK(BLS12381Element& g1, vector<BLS12381Element>& y1,vecto
     }
 }
 
+void ExpVerifier::NIZKPoK_(BLS12381Element pk_tmp, vector<BLS12381Element>& a, vector<BLS12381Element>& ask, std::stringstream& recvss, ThreadPool* pool){
+    recvss.seekg(0);
+    std::stringstream buf;
+    vector<BLS12381Element> Z(a.size());
+    vector<Plaintext> z(a.size());
+    for (size_t i = 0; i < a.size(); i++){
+        ask[i].unpack(recvss);
+        ask[i].pack(buf);
+    }
+    for (size_t i = 0; i < a.size(); i++){
+        Z[i].unpack(recvss);
+        Z[i].pack(buf);
+    }
+    P.set_challenge(buf);
+    vector<Plaintext> s(a.size());
+    for (size_t i = 0; i < a.size(); i++){
+        s[i].unpack(recvss);
+    }
+    vector<std::future<void>> futs2;
+    Plaintext tmp = P.challenge;
+    for (size_t i = 0; i < a.size(); i++){
+        futs2.emplace_back(pool->enqueue([&s, &z, &tmp, i, &ask, &a, &Z]() {
+            BLS12381Element r1 = a[i] * s[i].get_message() + ask[i] * tmp.get_message();
+            if (Z[i] != r1){
+                throw runtime_error("invalid exp proof");
+            }
+        }));
+    }
+    for (auto& f : futs2) f.get(); futs2.clear();
+}
+
 void ExpVerifier::NIZKPoK(BLS12381Element& g1, BLS12381Element& y1, BLS12381Element& y2, std::stringstream& ciphertexts, std::stringstream& cleartexts, ThreadPool* pool, int i){
 
     std::future<void> future;

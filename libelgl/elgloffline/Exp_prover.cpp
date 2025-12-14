@@ -66,6 +66,48 @@ size_t ExpProver::NIZKPoK(ExpProof& P, std::stringstream&  ciphertexts, std::str
     return report_size();
 }
 
+size_t ExpProver::NIZKPoK_(ExpProof& P, std::stringstream& sendss,
+    const BLS12381Element& pk_tmp,
+    const vector<BLS12381Element>& a,
+    const vector<BLS12381Element>& ask,
+    const Plaintext& x, ThreadPool* pool){
+    if(a.size() != ask.size()){
+        throw std::invalid_argument("a and ask must have the same size");
+    }
+    for (size_t i = 0; i < ask.size(); i++){
+        ask[i].pack(sendss);
+    }
+    vector<Plaintext> z(a.size());
+    vector<BLS12381Element> Z(a.size());
+    vector<std::future<void>> futs1;
+    for (size_t i = 0; i < a.size(); i++) {
+        futs1.emplace_back(pool->enqueue([&Z, &z, i, &a]() {
+            z[i].set_random();
+            Z[i] = a[i] * z[i].get_message();
+        }));
+    }
+    for (auto& f : futs1) f.get(); futs1.clear();
+
+    for (size_t i = 0; i < ask.size(); i++){
+        Z[i].pack(sendss);
+    }
+    P.set_challenge(sendss);
+    vector<Plaintext> s(a.size());
+    vector<std::future<void>> futs2;
+    for (size_t i = 0; i < ask.size(); i++){
+        futs2.emplace_back(pool->enqueue([&s, &z, &x, &P, i]() {
+            s[i] = z[i] - x * P.challenge;
+        }));
+    }
+    for (auto& f : futs2) f.get(); futs2.clear();
+
+    for (size_t i = 0; i < ask.size(); i++){
+        s[i].pack(sendss);
+    }
+
+    return report_size();
+}
+
 // Online 
 size_t ExpProver::NIZKPoK(ExpProof& P, std::stringstream& ciphertexts, std::stringstream&  cleartexts,
     const BLS12381Element& g1,
@@ -96,6 +138,7 @@ size_t ExpProver::NIZKPoK(ExpProof& P, std::stringstream& ciphertexts, std::stri
     });
     return future.get();
 }
+
 
 size_t ExpProver::report_size(){
     size_t res = 0;

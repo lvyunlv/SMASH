@@ -135,6 +135,7 @@ class LVT{
     tuple<Plaintext, vector<Ciphertext>> lookup_online(Plaintext& x_share, vector<Ciphertext>& x_cipher);
     tuple<Plaintext, vector<Ciphertext>> lookup_online_(Plaintext& x_share, Ciphertext& x_cipher, vector<Ciphertext>& x_ciphers);
     tuple<vector<Plaintext>, vector<vector<Ciphertext>>> lookup_online_batch(vector<Plaintext>& x_share, vector<vector<Ciphertext>>& x_cipher); 
+    vector<BLS12381Element> batch_thdcp(vector<Ciphertext>& c, vector<Plaintext>& u, ELGL<IO>* elgl, const ELGL_PK& global_pk, const std::vector<ELGL_PK>& user_pks, MPIOChannel<IO>* io, ThreadPool* pool, int party, int num_party, std::map<std::string, Fr>& P_to_m);
     tuple<vector<Plaintext>, vector<vector<Ciphertext>>> lookup_online_batch(vector<Plaintext>& x_share, vector<Ciphertext>& x_cipher); 
     vector<Plaintext> lookup_online_batch_(vector<Plaintext>& x_share);
     void save_full_state(const std::string& filename);
@@ -1222,6 +1223,77 @@ BLS12381Element thdcp_(Ciphertext& c, ELGL<IO>* elgl, const ELGL_PK& global_pk, 
 }
 
 template <typename IO>
+vector<BLS12381Element> LVT<IO>::batch_thdcp(vector<Ciphertext>& c, vector<Plaintext>& u_tmp, ELGL<IO>* elgl, const ELGL_PK& global_pk, const std::vector<ELGL_PK>& user_pks, MPIOChannel<IO>* io, ThreadPool* pool, int party, int num_party, std::map<std::string, Fr>& P_to_m) {
+    Plaintext sk(elgl->kp.get_sk().get_sk());
+    vector<BLS12381Element> ask(c.size());
+    vector<vector<BLS12381Element>> ask_parts(num_party, vector<BLS12381Element>(c.size()));
+    vector<BLS12381Element> g1(c.size());
+    std::vector<std::future<void>> futures;
+    for (size_t i = 0; i < c.size(); i++) {
+        futures.emplace_back(pool->enqueue([&g1, &c, i, &sk, &ask, &ask_parts, &party]() {
+            g1[i] = c[i].get_c0();
+            ask[i] = g1[i] * sk.get_message();
+            ask_parts[party - 1][i] = ask[i];
+        }));
+    }
+    for (auto& fut : futures) fut.get();
+    futures.clear();
+
+    ExpProof exp_proof(global_pk);
+    ExpProver exp_prover(exp_proof);
+    ExpVerifier exp_verifier(exp_proof);
+
+    std::stringstream sendss;
+    BLS12381Element pk_tmp = user_pks[party-1].get_pk();
+    exp_prover.NIZKPoK_(exp_proof, sendss, pk_tmp, g1, ask, sk, pool);
+    for (size_t i = 0; i < c.size(); i++) u_tmp[i].pack(sendss);
+
+    elgl->serialize_sendall_(sendss);
+    std::vector<std::future<void>> verify_futures;
+    vector<std::stringstream> recvss(num_party);
+    vector<vector<Plaintext>> u_others(num_party, vector<Plaintext>(c.size()));
+    for (int i = 1; i <= num_party; ++i) {
+        if (i != party) {
+            verify_futures.push_back(pool->enqueue([i, &g1, &user_pks, pool, elgl, &exp_verifier, &c, &recvss, &u_others, &ask_parts]() {
+                elgl->deserialize_recv_(recvss[i-1], i);
+                BLS12381Element y1_other = user_pks[i - 1].get_pk();
+                exp_verifier.NIZKPoK_(y1_other, g1, ask_parts[i-1], recvss[i-1], pool);
+                for (size_t t = 0; t < c.size(); t++) u_others[i-1][t].unpack(recvss[i-1]);
+            }));
+        }
+    }
+    for (auto& fut : verify_futures) fut.get();
+    verify_futures.clear();
+
+
+    std::vector<std::future<void>> fu;
+    for (size_t i = 0; i < c.size(); i++) {
+            fu.push_back(pool->enqueue([i, &u_others, &num_party, &u_tmp]() {
+                for (int p = 0; p < num_party; p++) {
+                    u_tmp[i] += u_others[p][i];
+                }
+            }));
+    }
+    for (auto& fut : fu) fut.get();
+    fu.clear();
+
+    vector<BLS12381Element> pi_ask(c.size());
+    std::vector<std::future<void>> comp_futures;
+     for (size_t i = 0; i < c.size(); i++) {
+        comp_futures.emplace_back(pool->enqueue([&c, i, &pi_ask, &ask_parts, &num_party]() {
+            pi_ask[i] = c[i].get_c1();
+            for (int j = 0; j < num_party; j++) {
+                pi_ask[i] -= ask_parts[j][i];
+            }
+        }));
+    }
+    for (auto& fut : comp_futures) fut.get();
+    comp_futures.clear();
+
+    return pi_ask;
+}
+
+template <typename IO>
 tuple<Plaintext, vector<Ciphertext>> LVT<IO>::lookup_online(Plaintext& x_share, vector<Ciphertext>& x_cipher){ 
     Plaintext out;
     vector<Ciphertext> out_ciphers;
@@ -1367,6 +1439,7 @@ tuple<vector<Plaintext>, vector<vector<Ciphertext>>> LVT<IO>::lookup_online_batc
 {
     size_t x_size = x_shares.size();
     if (x_size == 0) return {};
+    
     vector<Plaintext> out(x_size);
     vector<vector<Ciphertext>> out_ciphers(num_party, vector<Ciphertext>(x_size));
     vector<std::future<void>> fut;  
@@ -1375,7 +1448,6 @@ tuple<vector<Plaintext>, vector<vector<Ciphertext>>> LVT<IO>::lookup_online_batc
     vector<Plaintext>  u_total(x_size);
     vector<Ciphertext> c_total(x_size);
     vector<BLS12381Element> local_p1(x_size);
-    vector<BLS12381Element> p_sum(x_size);
     Fr sk = elgl->kp.sk.get_sk();
     for (size_t i = 0; i < x_size; i++) {
         fut.push_back(pool->enqueue([&, i]() {
@@ -1385,81 +1457,18 @@ tuple<vector<Plaintext>, vector<vector<Ciphertext>>> LVT<IO>::lookup_online_batc
             for (size_t p = 1; p < num_party; p++) {
                 c_total[i] += x_ciphers[p][i] + cr_i[p];
             }
-            local_p1[i] = c_total[i].get_c0() * sk;
-            p_sum[i] = local_p1[i];
         }));
     }
     for (auto &f : fut) f.get();
     fut.clear();
-    std::stringstream send_ss;
-    for (size_t i = 0; i < x_size; ++i) {
-        local_p1[i].pack(send_ss);
-        local_u_share[i].pack(send_ss);
-    }
-    Plaintext com = set_challenge(send_ss);
-    vector<Plaintext> com_(num_party);
-    elgl->serialize_sendall(com);
-    for (int p = 1; p <= num_party; p++) {
-        if (p == party) continue;
-        fut.push_back(pool->enqueue([&, p]() {
-            elgl->deserialize_recv(com_[p-1], p);
-        }));
-    }
-    for (auto &f : fut) f.get();
-    fut.clear();
-    elgl->serialize_sendall_(send_ss);
-    vector<std::stringstream> recv_ss(num_party);
-    for (int p = 1; p <= num_party; p++) {
-        if (p == party) continue;
-        fut.push_back(pool->enqueue([&, p]() {
-            elgl->deserialize_recv_(recv_ss[p-1], p);
-        }));
-    }
-    for (auto &f : fut) f.get();
-    fut.clear();
-    vector<vector<BLS12381Element>> recv_p1(num_party, vector<BLS12381Element>(x_size));
-    vector<vector<Plaintext>>  recv_shares(num_party, vector<Plaintext>(x_size));
-    for (size_t p = 1; p <= num_party; p++) {
-        if (p == party) continue;
-        fut.push_back(pool->enqueue([&, p]() {
-            std::stringstream ol(recv_ss[p-1].str());
-            Plaintext pppp = set_challenge(ol);
-            if (com_[p-1].get_message().getMpz() != pppp.get_message().getMpz()) {
-                throw std::runtime_error("lookup_online_batch check failed: com_ != set_challenge(recv_ss)");
-            }
-            for (size_t i = 0; i < x_size; ++i) {
-                recv_p1[p-1][i].unpack(recv_ss[p-1]);
-                recv_shares[p-1][i].unpack(recv_ss[p-1]);
-            }
-        }));
-    }
-    for (auto &f : fut) f.get();
-    fut.clear();
-    size_t num_workers = std::min(static_cast<size_t>(thread_num), x_size);
-    size_t block_size = (x_size + num_workers - 1) / num_workers;
-    for (size_t w = 0; w < num_workers; ++w) {
-        size_t start = w * block_size;
-        size_t end = std::min(x_size, start + block_size);
-        if (start >= end) continue;
-        fut.push_back(pool->enqueue([&, start, end]() {
-            for (size_t i = start; i < end; ++i) {
-                for (size_t p = 1; p <= num_party; ++p) {
-                    if (p == party) continue;
-                    p_sum[i] += recv_p1[p-1][i];
-                    u_total[i] += recv_shares[p-1][i];
-                }
-            }
-        }));
-    }
-    for (auto &f : fut) f.get();
-    fut.clear();
+    vector<BLS12381Element> U = batch_thdcp(c_total, u_total, elgl, global_pk, user_pk, elgl->io, pool, party, num_party, P_to_m);
+
     mcl::Vint su_mod;
     su_mod.setStr(to_string(su));
-    for (size_t i = 0; i < x_size; i++) {
+    for (size_t i = 0; i < c_total.size(); i++) {
         fut.push_back(pool->enqueue([&, i]() {
-            BLS12381Element H = c_total[i].get_c1() - p_sum[i];
-            BLS12381Element U = BLS12381Element(u_total[i].get_message());
-            if (H != U) {
+            BLS12381Element UU = BLS12381Element(u_total[i].get_message());
+            if (U[i] != UU) {
                 std::cerr << "[Error] lookup_online_batch verify fail at i=" << i << " party=" << party << "\n";
                 exit(1);
             }
