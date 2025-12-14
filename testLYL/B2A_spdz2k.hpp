@@ -28,15 +28,17 @@ inline SPDZ2k<MultiIOBase>::LabeledShare B2A(
     MultiIO* io,
     ThreadPool* pool,
     const uint64_t& FIELD_SIZE,
-    const vector<TinyMAC<MultiIOBase>::LabeledShare>& x_bits,
-    std::chrono::_V2::system_clock::time_point& t,
-    int& bytes
+    const vector<TinyMAC<MultiIOBase>::LabeledShare>& x_bits
 ) {
+    int bytes = io->get_total_bytes_sent();
+    auto t = std::chrono::high_resolution_clock::now();
+    lvt->generate_shares(lvt->lut_share, lvt->rotation, lvt->table);nta();
     int l = x_bits.size();
+    for (int i = 1; i < l; ++i) lvt->generate_shares(lvt->lut_share, lvt->rotation, lvt->table);
     vector<SPDZ2k<MultiIOBase>::LabeledShare> shared_x(l); 
     vector<TinyMAC<MultiIOBase>::LabeledShare> r_bits(l), u_bits(l);
     std::random_device rd;
-    std::mt19937 gen(rd());
+    std::mt19937 gen(rd());nt(nw);
     std::uniform_int_distribution<int> bit_dis(0, 1);
     r_bits[0] = tiny.distributed_share(bit_dis(gen));
     for (int i = 1; i < l; ++i) {r_bits[i] = tiny.distributed_share(bit_dis(gen));}
@@ -96,9 +98,25 @@ inline SPDZ2k<MultiIOBase>::LabeledShare B2A(
     << "Offline Communication: " << comm_kb1 << " KB, "
     << "Offline Time: " << time_ms1 << " ms" << std::endl;
     int bytes_start = io->get_total_bytes_sent();
-    auto t1 = std::chrono::high_resolution_clock::now();
+    auto t1 = std::chrono::high_resolution_clock::now(); nt(nw);
     for (int i = 0; i < l; ++i) u_bits[i] = tiny.add(x_bits[i], r_bits[i]);
-    for (int i = 0; i < l; ++i) {
+    auto spdz2k_u0 = spdz2k.add(shared_x[0], shared_r[0]);
+    auto m0 = spdz2k.multiply(shared_x[0], shared_r[0]);
+    auto spdz2k_open0 = spdz2k.reconstruct(m0);
+    spdz2k_open0 = (spdz2k_open0 % FIELD_SIZE + FIELD_SIZE) % FIELD_SIZE;
+    m0 = m0 * 2;
+    m0.value = (FIELD_SIZE - m0.value) % FIELD_SIZE;
+    if (m0.value < 0) m0.value += FIELD_SIZE;
+    m0.mac = (FIELD_SIZE - m0.mac) % FIELD_SIZE;
+    if (m0.mac < 0) m0.mac += FIELD_SIZE;
+    spdz2k_u0 = spdz2k.add(spdz2k_u0, m0);
+    spdz2k_open0 = spdz2k.reconstruct(spdz2k_u0);
+    spdz2k_open0 = (spdz2k_open0 % FIELD_SIZE + FIELD_SIZE) % FIELD_SIZE;
+    uint8_t tiny_u = tiny.reconstruct(tiny.add(x_bits[0], r_bits[0]));nta();
+    if (((2 + tiny_u % 2)+2)%2 != ((2 + spdz2k_open0 % 2)+2)%2) {
+        throw std::runtime_error("B2A_spdz2k check failed: decrypted value != share sum");
+    }
+    for (int i = 1; i < l; ++i) {
         auto spdz2k_u = spdz2k.add(shared_x[i], shared_r[i]);
         auto m = spdz2k.multiply(shared_x[i], shared_r[i]);
         auto spdz2k_open = spdz2k.reconstruct(m);
@@ -151,12 +169,12 @@ inline SPDZ2k<MultiIOBase>::LabeledShare B2A_for_A2B(
     vector<SPDZ2k<MultiIOBase>::LabeledShare> shared_x(l); 
     vector<TinyMAC<MultiIOBase>::LabeledShare> r_bits(l), u_bits(l);
     std::random_device rd;
-    std::mt19937 gen(rd());
+    std::mt19937 gen(rd());nt(nw);
     std::uniform_int_distribution<int> bit_dis(0, 1);
     r_bits[0] = tiny.distributed_share(bit_dis(gen));
-    for (int i = 1; i < l; ++i) {nta();r_bits[i] = tiny.distributed_share(bit_dis(gen));}
+    for (int i = 1; i < l; ++i) {r_bits[i] = tiny.distributed_share(bit_dis(gen));}
     vector<SPDZ2k<MultiIOBase>::LabeledShare> shared_r(l);
-    shared_x.resize(l);nt(nw);
+    shared_x.resize(l);
     vector<Ciphertext> x_cipher(l), r_cipher(l), x_lut_ciphers(num_party);
     vector<Plaintext> x_plain(l), r_plain(l); 
     Plaintext plain_i;
@@ -204,7 +222,23 @@ inline SPDZ2k<MultiIOBase>::LabeledShare B2A_for_A2B(
         if (shared_x[i].value == 0) shared_x[i].value = 0;
     }
     for (int i = 0; i < l; ++i) u_bits[i] = tiny.add(x_bits[i], r_bits[i]);
-    for (int i = 0; i < l; ++i) {
+    auto spdz2k_u0 = spdz2k.add(shared_x[0], shared_r[0]);
+    auto m0 = spdz2k.multiply(shared_x[0], shared_r[0]);
+    auto spdz2k_open0 = spdz2k.reconstruct(m0);
+    spdz2k_open0 = (spdz2k_open0 % FIELD_SIZE + FIELD_SIZE) % FIELD_SIZE;
+    m0 = m0 * 2;
+    m0.value = (FIELD_SIZE - m0.value) % FIELD_SIZE;
+    if (m0.value < 0) m0.value += FIELD_SIZE;
+    m0.mac = (FIELD_SIZE - m0.mac) % FIELD_SIZE;
+    if (m0.mac < 0) m0.mac += FIELD_SIZE;
+    spdz2k_u0 = spdz2k.add(spdz2k_u0, m0);
+    spdz2k_open0 = spdz2k.reconstruct(spdz2k_u0);
+    spdz2k_open0 = (spdz2k_open0 % FIELD_SIZE + FIELD_SIZE) % FIELD_SIZE;
+    uint8_t tiny_u = tiny.reconstruct(tiny.add(x_bits[0], r_bits[0]));nta();
+    if (((2 + tiny_u % 2)+2)%2 != ((2 + spdz2k_open0 % 2)+2)%2) {
+        throw std::runtime_error("B2A_spdz2k check failed: decrypted value != share sum");
+    }
+    for (int i = 1; i < l; ++i) {
         auto spdz2k_u = spdz2k.add(shared_x[i], shared_r[i]);
         auto m = spdz2k.multiply(shared_x[i], shared_r[i]);
         auto spdz2k_open = spdz2k.reconstruct(m);
@@ -219,7 +253,7 @@ inline SPDZ2k<MultiIOBase>::LabeledShare B2A_for_A2B(
         spdz2k_open = (spdz2k_open % FIELD_SIZE + FIELD_SIZE) % FIELD_SIZE;
         uint8_t tiny_u = tiny.reconstruct(tiny.add(x_bits[i], r_bits[i]));
         if (((2 + tiny_u % 2)+2)%2 != ((2 + spdz2k_open % 2)+2)%2) {
-            throw std::runtime_error("B2A_for_A2B_spdz2k check failed: decrypted value != share sum");
+            throw std::runtime_error("B2A_spdz2k check failed: decrypted value != share sum");
         }
     }
     SPDZ2k<MultiIOBase>::LabeledShare share_x_decimal;
@@ -230,7 +264,6 @@ inline SPDZ2k<MultiIOBase>::LabeledShare B2A_for_A2B(
     for (int i = 0; i < l; ++i) {
         share_x_decimal = share_x_decimal * 2 + shared_x[i];
     }
-
     return share_x_decimal; 
 }
 } // namespace B2A_spdz2k

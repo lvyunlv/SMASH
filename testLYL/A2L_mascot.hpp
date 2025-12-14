@@ -27,9 +27,7 @@ inline tuple<Plaintext, vector<Ciphertext>> A2L(
     MultiIO* io,
     ThreadPool* pool,
     const MASCOT<MultiIOBase>::LabeledShare& shared_x,
-    const mcl::Vint& fd,
-    double& online_time,
-    double& online_comm
+    const mcl::Vint& fd
 ) {
     int bytes = io->get_total_bytes_sent();
     auto t = std::chrono::high_resolution_clock::now();
@@ -105,8 +103,6 @@ inline tuple<Plaintext, vector<Ciphertext>> A2L(
             double time_ms = std::chrono::duration<double, std::milli>(t2 - t1).count();
             std::cout << "Online Communication: " << comm_kb << " KB, "
                       << "Online Time: " << time_ms << " ms" << std::endl;
-            online_time = time_ms;
-            online_comm = comm_kb;
             return std::make_tuple(x, vec_cx);
         }
         uu += G_fd;

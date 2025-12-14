@@ -28,15 +28,17 @@ inline MASCOT<MultiIOBase>::LabeledShare B2A(
     MultiIO* io,
     ThreadPool* pool,
     const mcl::Vint& FIELD_SIZE,
-    const vector<TinyMAC<MultiIOBase>::LabeledShare>& x_bits,
-    std::chrono::_V2::system_clock::time_point& t,
-    int& bytes
+    const vector<TinyMAC<MultiIOBase>::LabeledShare>& x_bits
 ) {
+    int bytes = io->get_total_bytes_sent();
+    auto t = std::chrono::high_resolution_clock::now();
+    lvt->generate_shares(lvt->lut_share, lvt->rotation, lvt->table);nta();
     int l = x_bits.size();
+    for (int i = 1; i < l; ++i) lvt->generate_shares(lvt->lut_share, lvt->rotation, lvt->table);
     vector<MASCOT<MultiIOBase>::LabeledShare> shared_x(l); 
     vector<TinyMAC<MultiIOBase>::LabeledShare> r_bits(l), u_bits(l);
     std::random_device rd;
-    std::mt19937 gen(rd());
+    std::mt19937 gen(rd());nt(nw);
     std::uniform_int_distribution<int> bit_dis(0, 1);
     r_bits[0] = tiny.distributed_share(bit_dis(gen));
     for (int i = 1; i < l; ++i) {r_bits[i] = tiny.distributed_share(bit_dis(gen));}
@@ -96,9 +98,25 @@ inline MASCOT<MultiIOBase>::LabeledShare B2A(
     << "Offline Communication: " << comm_kb1 << " KB, "
     << "Offline Time: " << time_ms1 << " ms" << std::endl;
     int bytes_start = io->get_total_bytes_sent();
-    auto t1 = std::chrono::high_resolution_clock::now();
+    auto t1 = std::chrono::high_resolution_clock::now(); nt(nw);
     for (int i = 0; i < l; ++i) u_bits[i] = tiny.add(x_bits[i], r_bits[i]);
-    for (int i = 0; i < l; ++i) {
+    auto mascot_u0 = mascot.add(shared_x[0], shared_r[0]);
+    auto m0 = mascot.multiply(shared_x[0], shared_r[0]);
+    auto mascot_open0 = mascot.reconstruct(m0);
+    mascot_open0 = (mascot_open0 % FIELD_SIZE + FIELD_SIZE) % FIELD_SIZE;
+    m0 = m0 * 2;
+    m0.value = (FIELD_SIZE - m0.value) % FIELD_SIZE;
+    if (m0.value < 0) m0.value += FIELD_SIZE;
+    m0.mac = (FIELD_SIZE - m0.mac) % FIELD_SIZE;
+    if (m0.mac < 0) m0.mac += FIELD_SIZE;
+    mascot_u0 = mascot.add(mascot_u0, m0);
+    mascot_open0 = mascot.reconstruct(mascot_u0);
+    mascot_open0 = (mascot_open0 % FIELD_SIZE + FIELD_SIZE) % FIELD_SIZE;
+    uint8_t tiny_u = tiny.reconstruct(tiny.add(x_bits[0], r_bits[0]));nta();
+    if (((2 + tiny_u % 2)+2)%2 != ((2 + mascot_open0 % 2)+2)%2) {
+        throw std::runtime_error("B2A_mascot check failed: decrypted value != share sum");
+    }
+    for (int i = 1; i < l; ++i) {
         auto mascot_u = mascot.add(shared_x[i], shared_r[i]);
         auto m = mascot.multiply(shared_x[i], shared_r[i]);
         auto mascot_open = mascot.reconstruct(m);
@@ -147,16 +165,14 @@ inline MASCOT<MultiIOBase>::LabeledShare B2A_for_A2B(
     const mcl::Vint& FIELD_SIZE,
     const vector<TinyMAC<MultiIOBase>::LabeledShare>& x_bits
 ) {
-    int bytes = io->get_total_bytes_sent();
-    auto t = std::chrono::high_resolution_clock::now();
     int l = x_bits.size();
     vector<MASCOT<MultiIOBase>::LabeledShare> shared_x(l); 
     vector<TinyMAC<MultiIOBase>::LabeledShare> r_bits(l), u_bits(l);
     std::random_device rd;
-    std::mt19937 gen(rd());
+    std::mt19937 gen(rd());nt(nw);
     std::uniform_int_distribution<int> bit_dis(0, 1);
-    r_bits[0] = tiny.distributed_share(bit_dis(gen));nta();
-    for (int i = 1; i < l; ++i) r_bits[i] = tiny.distributed_share(bit_dis(gen));
+    r_bits[0] = tiny.distributed_share(bit_dis(gen));
+    for (int i = 1; i < l; ++i) {r_bits[i] = tiny.distributed_share(bit_dis(gen));}
     vector<MASCOT<MultiIOBase>::LabeledShare> shared_r(l);
     shared_x.resize(l);
     vector<Ciphertext> x_cipher(l), r_cipher(l), x_lut_ciphers(num_party);
@@ -165,7 +181,7 @@ inline MASCOT<MultiIOBase>::LabeledShare B2A_for_A2B(
     plain_i.assign(std::to_string(r_bits[0].value)); 
     r_cipher[0] = lvt->global_pk.encrypt(plain_i);
     vector<Ciphertext> r_ciphers;
-    r_ciphers.resize(num_party); nt(nw);
+    r_ciphers.resize(num_party); 
     auto result = lvt->lookup_online_(plain_i, r_cipher[0], r_ciphers);
     r_plain[0] = std::get<0>(result); nta(); r_ciphers = std::get<1>(result);  
     shared_r[0] = L2A_mascot::L2A_for_B2A(elgl, lvt, mascot, party, num_party, io, pool, r_plain[0], r_ciphers, FIELD_SIZE);
@@ -184,10 +200,10 @@ inline MASCOT<MultiIOBase>::LabeledShare B2A_for_A2B(
     } 
     plain_i.assign(std::to_string(x_bits[0].value));
     x_cipher[0] = lvt->global_pk.encrypt(plain_i);
-    vector<Ciphertext> x_ciphers;
+    vector<Ciphertext> x_ciphers;nt(nw);
     x_ciphers.resize(num_party);  
     auto result1 = lvt->lookup_online_(plain_i, x_cipher[0], x_ciphers);
-    x_plain[0] = std::get<0>(result1);
+    x_plain[0] = std::get<0>(result1);nta();
     auto lut_ciphers = std::get<1>(result1);  
     for (int i = 1; i < l; ++i) {
         Plaintext plain_i;
@@ -206,7 +222,23 @@ inline MASCOT<MultiIOBase>::LabeledShare B2A_for_A2B(
         if (shared_x[i].value == 0) shared_x[i].value = 0;
     }
     for (int i = 0; i < l; ++i) u_bits[i] = tiny.add(x_bits[i], r_bits[i]);
-    for (int i = 0; i < l; ++i) {
+    auto mascot_u0 = mascot.add(shared_x[0], shared_r[0]);
+    auto m0 = mascot.multiply(shared_x[0], shared_r[0]);
+    auto mascot_open0 = mascot.reconstruct(m0);
+    mascot_open0 = (mascot_open0 % FIELD_SIZE + FIELD_SIZE) % FIELD_SIZE;
+    m0 = m0 * 2;
+    m0.value = (FIELD_SIZE - m0.value) % FIELD_SIZE;
+    if (m0.value < 0) m0.value += FIELD_SIZE;
+    m0.mac = (FIELD_SIZE - m0.mac) % FIELD_SIZE;
+    if (m0.mac < 0) m0.mac += FIELD_SIZE;
+    mascot_u0 = mascot.add(mascot_u0, m0);
+    mascot_open0 = mascot.reconstruct(mascot_u0);
+    mascot_open0 = (mascot_open0 % FIELD_SIZE + FIELD_SIZE) % FIELD_SIZE;
+    uint8_t tiny_u = tiny.reconstruct(tiny.add(x_bits[0], r_bits[0]));nta();
+    if (((2 + tiny_u % 2)+2)%2 != ((2 + mascot_open0 % 2)+2)%2) {
+        throw std::runtime_error("B2A_mascot check failed: decrypted value != share sum");
+    }
+    for (int i = 1; i < l; ++i) {
         auto mascot_u = mascot.add(shared_x[i], shared_r[i]);
         auto m = mascot.multiply(shared_x[i], shared_r[i]);
         auto mascot_open = mascot.reconstruct(m);
@@ -221,7 +253,7 @@ inline MASCOT<MultiIOBase>::LabeledShare B2A_for_A2B(
         mascot_open = (mascot_open % FIELD_SIZE + FIELD_SIZE) % FIELD_SIZE;
         uint8_t tiny_u = tiny.reconstruct(tiny.add(x_bits[i], r_bits[i]));
         if (((2 + tiny_u % 2)+2)%2 != ((2 + mascot_open % 2)+2)%2) {
-            throw std::runtime_error("B2A_for_A2B_mascot check failed: decrypted value != share sum");
+            throw std::runtime_error("B2A_mascot check failed: decrypted value != share sum");
         }
     }
     MASCOT<MultiIOBase>::LabeledShare share_x_decimal;
@@ -232,7 +264,6 @@ inline MASCOT<MultiIOBase>::LabeledShare B2A_for_A2B(
     for (int i = 0; i < l; ++i) {
         share_x_decimal = share_x_decimal * 2 + shared_x[i];
     }
-
     return share_x_decimal; 
 }
 } // namespace B2A_mascot

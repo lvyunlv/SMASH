@@ -72,11 +72,7 @@ int main(int argc, char** argv) {
     mcl::Vint x_mascot;
     x_mascot.setRand(FIELD_SIZE); 
     MASCOT<MultiIOBase>::LabeledShare x_arith = mascot.distributed_share(x_mascot);nt(nwc); 
-    int comm = io->get_total_bytes_sent();
-    auto time = std::chrono::high_resolution_clock::now();
-    lvt->generate_shares(lvt->lut_share, lvt->rotation, lvt->table);nta();
-    for(int i=1; i<su; i++) lvt->generate_shares(lvt->lut_share, lvt->rotation, lvt->table);
-    auto x_bool = A2B_mascot::A2B(elgl, lvt, tiny, mascot, party, num_party, nwc, io, &pool, FIELD_SIZE, su, x_arith, time, comm);
+    auto x_bool = A2B_mascot::A2B(elgl, lvt, tiny, mascot, party, num_party, nwc, io, &pool, FIELD_SIZE, su, x_arith);
     delete lvt;
     delete elgl;
     delete io;

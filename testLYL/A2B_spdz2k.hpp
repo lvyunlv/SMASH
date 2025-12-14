@@ -26,17 +26,19 @@ inline vector<TinyMAC<MultiIOBase>::LabeledShare> A2B(
     ThreadPool* pool,
     const uint64_t& FIELD_SIZE,
     int l,
-    const SPDZ2k<MultiIOBase>::LabeledShare& x_arith,
-    std::chrono::_V2::system_clock::time_point& offline_time,
-    int& offline_comm
+    const SPDZ2k<MultiIOBase>::LabeledShare& x_arith
 ) {
     int bytes = io->get_total_bytes_sent();
     auto t = std::chrono::high_resolution_clock::now();
     vector<TinyMAC<MultiIOBase>::LabeledShare> x_bool(l);
     vector<TinyMAC<MultiIOBase>::LabeledShare> r_bits(l);
-    std::random_device rd;nta();std::mt19937 gen(rd());
+    std::random_device rd;
+    std::mt19937 gen(rd());
     std::uniform_int_distribution<int> bit_dis(0, 1);
-    for (int i = 1; i < l; ++i) r_bits[i] = tiny.distributed_share(bit_dis(gen));
+    lvt->generate_shares(lvt->lut_share, lvt->rotation, lvt->table);
+    r_bits[0] = tiny.distributed_share(bit_dis(gen));nta();
+    for (int i=1; i<l; ++i) lvt->generate_shares(lvt->lut_share, lvt->rotation, lvt->table);
+    for (int i=1; i<l; ++i) r_bits[i] = tiny.distributed_share(bit_dis(gen));nt(nw);
     SPDZ2k<MultiIOBase>::LabeledShare r_arith;
     r_arith = B2A_spdz2k::B2A_for_A2B(elgl, lvt, tiny, spdz2k, party, num_party, nw, io, pool, FIELD_SIZE, r_bits);
     auto tt = std::chrono::high_resolution_clock::now();
@@ -60,14 +62,12 @@ inline vector<TinyMAC<MultiIOBase>::LabeledShare> A2B(
         tmp >>= 1;
     }
     vector<TinyMAC<MultiIOBase>::LabeledShare> u_bool(l);
-    u_bool[0] = tiny.distributed_share(u_bits[0]);nta();
-    x_bool[0] = tiny.add(u_bool[0], r_bits[0]);
-    u_bool[1] = tiny.distributed_share(u_bits[1]);nta();
-    x_bool[1] = tiny.add(u_bool[1], r_bits[1]);
-    auto t2 = std::chrono::high_resolution_clock::now();
-    for (int i = 2; i < l; ++i) u_bool[i] = tiny.distributed_share(u_bits[i]);
-    for (int i = 2; i < l; ++i) x_bool[i] = tiny.add(u_bool[i], r_bits[i]);
+    u_bool[0] = tiny.distributed_share(u_bits[0]);
+    x_bool[0] = tiny.add(u_bool[0], r_bits[0]);nta();
+    for (int i = 1; i < l; ++i) u_bool[i] = tiny.distributed_share(u_bits[i]);
+    for (int i = 1; i < l; ++i) x_bool[i] = tiny.add(u_bool[i], r_bits[i]);
     int bytes_end = io->get_total_bytes_sent();
+    auto t2 = std::chrono::high_resolution_clock::now();
     double comm_kb = double(bytes_end - bytes_start) / 1024.0;
     double time_ms = std::chrono::duration<double, std::milli>(t2 - t1).count();
     std::cout << std::fixed << std::setprecision(6)

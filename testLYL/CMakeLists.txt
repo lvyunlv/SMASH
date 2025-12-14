@@ -41,7 +41,6 @@ add_test_case_with_run(A2B_mascot)
 add_test_case_with_run(A2B_spdz2k)
 # add_test_case_with_run(BSGS)
 # add_test_case_with_run(P2M)
-
 # add_test_case_with_run(B2L)
 # add_test_case_with_run(L2B)
 

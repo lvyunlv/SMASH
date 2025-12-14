@@ -62,16 +62,8 @@ int main(int argc, char** argv) {
     if (party==1) for(int i=2;i<=num_party;i++) elgl->wait_for(i);
     else elgl->send_done(1);
     mcl::Vint x_mascot; x_mascot.setRand(FIELD_SIZE);
-    MASCOT<MultiIOBase>::LabeledShare shared_x = mascot.distributed_share(x_mascot);
-    nt(nwc);
-    double total_time=0, total_comm=0, online_time=0, online_comm=0;
-    int times=1;
-    for(int i=0;i<times;i++){
-        auto [x, vec_cx] = A2L_mascot::A2L(elgl,lvt,mascot,party,num_party,io,&pool,shared_x,FIELD_SIZE,online_time,online_comm);
-        total_time += online_time;
-        total_comm += online_comm;
-    }
-    // cout << "Average time: " << (total_time/times) << "ms && Average communication: " << (total_comm/times) << "KB" << endl;
+    MASCOT<MultiIOBase>::LabeledShare shared_x = mascot.distributed_share(x_mascot);nt(nwc);
+    auto [x, vec_cx] = A2L_mascot::A2L(elgl,lvt,mascot,party,num_party,io,&pool,shared_x,FIELD_SIZE);
     delete elgl; delete io; delete lvt;
     return 0;
 }
