@@ -5,22 +5,21 @@ BASE_DIR="$(dirname "$SCRIPT_DIR")"
 BIN_DIR="$BASE_DIR/build/bin"
 RESULTS_DIR="$BASE_DIR/Results"
 mkdir -p "$RESULTS_DIR"
-./test_gen_table2
-./test_BSGS
+./test_gen_File
 TESTS=(
-    "test_L2A_mascot"
-    "test_A2L_mascot"
-    "test_L2A_spdz2k"
-    "test_A2L_spdz2k"
-    "test_B2A_mascot"
-    "test_B2A_spdz2k"
-    "test_A2B_mascot"
+    # "test_L2A_mascot"
+    # "test_A2L_mascot"
+    # "test_L2A_spdz2k"
+    # "test_A2L_spdz2k"
+    # "test_B2A_mascot"
+    # "test_B2A_spdz2k"
+    # "test_A2B_mascot"
     "test_A2B_spdz2k"
 )
 
-NS=(2 4)
-NETS=("local" "lan" "wan")
-BASE_PORT=9992
+NS=(32)
+NETS=("wan")
+BASE_PORT=62983
 
 parse_value() {
     echo "$1" | sed -E "s/.*$2: ([0-9\.]+).*/\1/"
