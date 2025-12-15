@@ -41,6 +41,7 @@ inline MASCOT<MultiIOBase>::LabeledShare B2A(
     std::mt19937 gen(rd());nt(nw);
     std::uniform_int_distribution<int> bit_dis(0, 1);
     r_bits[0] = tiny.distributed_share(bit_dis(gen));
+    // TODO: parallelize
     for (int i = 1; i < l; ++i) {r_bits[i] = tiny.distributed_share(bit_dis(gen));}
     vector<MASCOT<MultiIOBase>::LabeledShare> shared_r(l);
     shared_x.resize(l);
