@@ -9,3 +9,8 @@
 [submodule "external/mcl"]
 	path = external/mcl
 	url = https://github.com/herumi/mcl.git
+
+[submodule "openfhe-development"]
+	path = openfhe-development
+	url = https://github.com/openfheorg/openfhe-development.git
+	branch = v1.0.4
