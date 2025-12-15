@@ -7,18 +7,18 @@ RESULTS_DIR="$BASE_DIR/Results"
 mkdir -p "$RESULTS_DIR"
 ./test_gen_File
 TESTS=(
-    # "test_L2A_mascot"
-    # "test_A2L_mascot"
-    # "test_L2A_spdz2k"
-    # "test_A2L_spdz2k"
-    # "test_B2A_mascot"
-    # "test_B2A_spdz2k"
-    # "test_A2B_mascot"
+    "test_L2A_mascot"
+    "test_A2L_mascot"
+    "test_L2A_spdz2k"
+    "test_A2L_spdz2k"
+    "test_B2A_mascot"
+    "test_B2A_spdz2k"
+    "test_A2B_mascot"
     "test_A2B_spdz2k"
 )
 
-NS=(32)
-NETS=("wan")
+NS=(2 4 8 16 32)
+NETS=("lan" "local")
 BASE_PORT=62983
 
 parse_value() {
