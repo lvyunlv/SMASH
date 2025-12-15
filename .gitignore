@@ -13,8 +13,9 @@ Makefile
 cmake_install.cmake
 install_manifest.txt
 lib/libmcl.so*
+Results/error_logs
 # Results/
-/Results/logs_online
+Results/logs_online
 # Compiled Object files
 *.slo
 *.lo

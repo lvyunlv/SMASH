@@ -1,8 +1,0 @@
-[INFO] No valid IP configuration provided. Auto-generating localhost IP list.
-[INFO] Party 1 -> 127.0.0.1:12599
-[INFO] Party 2 -> 127.0.0.1:12600
-Number of parties: 2
-Key Generation Done.
-Share Generation Done.
-Input size: 2048
-Online time: 0.326374 s, comm: 0.312509 MB
