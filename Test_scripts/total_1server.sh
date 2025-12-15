@@ -2,6 +2,10 @@
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BASE_DIR="$(dirname "$SCRIPT_DIR")"
+
+rm -rf "$BASE_DIR/build/cache"
+"$BASE_DIR/build/bin/test_gen_File"
+
 BIN_DIR="$BASE_DIR/build/bin"
 RESULTS_DIR="$BASE_DIR/Results"
 INPUT_DIR="$BASE_DIR/Input"
@@ -17,10 +21,10 @@ echo $((RANDOM % 11)) >> "$INPUT_FILE"
 
 TEST_NAME="test_lvt"
 
-NS=(2 4 8 16 32)
+NS=(32 16 8 4 2)
 NETS=("local" "lan" "wan")
 
-BASE_PORT=62000
+BASE_PORT=7222
 
 parse_value() {
     echo "$1" | sed -E "s/.*$2: ([0-9eE\.+-]+).*/\1/"

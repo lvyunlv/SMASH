@@ -39,28 +39,27 @@ void deserializeTable(vector<int64_t>& table, const char* filename, size_t se = 
         exit(1);
     }
 
-    table.resize(se);  // 预分配空间
+    table.resize(se); 
     inFile.read(reinterpret_cast<char*>(table.data()), se * sizeof(int64_t));
 
-    // 计算实际读取的元素个数
     size_t elementsRead = inFile.gcount() / sizeof(int64_t);
-    table.resize(elementsRead);  // 调整大小以匹配实际读取的内容
+    table.resize(elementsRead); 
 
     inFile.close();
 }
 
 
 void halfpack(BLS12381Element G1, std::stringstream& os) {
-    uint8_t buf[256]; // 足够容纳 ETH 序列化的 G1/G2
+    uint8_t buf[256]; 
     cybozu::MemoryOutputStream mos(buf, sizeof(buf));
 
     bool ok;
-    G1.point.save(&ok, mos, mcl::IoSerialize);  // 二进制序列化
+    G1.point.save(&ok, mos, mcl::IoSerialize); 
     if (!ok) {
         throw std::runtime_error("BLS12381Element::pack serialize failed");
     }
 
-    uint32_t len = mos.getPos();     // 实际写入字节数
+    uint32_t len = mos.getPos();   
     os.write((char*)&len, sizeof(uint32_t));
     os.write((char*)buf, len);
 }
@@ -78,7 +77,7 @@ void halfunpack(BLS12381Element G1, std::stringstream& is) {
 
     cybozu::MemoryInputStream mis(buf, len);
     bool ok;
-    G1.point.load(&ok, mis, mcl::IoSerialize);   // 二进制反序列化
+    G1.point.load(&ok, mis, mcl::IoSerialize);  
     if (!ok) {
         throw std::runtime_error("BLS12381Element::unpack load failed");
     }
@@ -399,7 +398,7 @@ LVT<IO>::LVT(int num_party, int party, MPIOChannel<IO>* io, ThreadPool* pool, EL
         out.write(reinterpret_cast<const char*>(table.data()), size * sizeof(int64_t));
         out.close();
     }
-    if (2 * su * num_party <= 256) {
+    if (2 * su * num_party <= 65536) {
         build_safe_P_to_m(P_to_m, 2 * su * num_party);
         return;
     }
@@ -740,7 +739,7 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
         res.clear();
         cip_lut[0].resize(su);
         bool flag = 0; 
-        if(ad <= 131072) flag = 1;
+        if(ad * num_party <= 65536) flag = 1;
         if(flag){
             BLS12381Element pk_tmp = this->global_pk.get_pk() * this->elgl->kp.get_sk().get_sk();
             for (size_t i = 0; i < su; i++){
@@ -1141,7 +1140,7 @@ Fr thdcp(Ciphertext& c, ELGL<IO>* elgl, const ELGL_PK& global_pk, const std::vec
 
     std::string key = pi_ask.getPoint().getStr();
     Fr y;
-    if(lvt->ad <= 131072) {
+    if(lvt->ad <= 1UL << 20) {
         auto it = P_to_m.find(key);
         bool t = 1;
         if (it == P_to_m.end()) {
@@ -1223,75 +1222,126 @@ BLS12381Element thdcp_(Ciphertext& c, ELGL<IO>* elgl, const ELGL_PK& global_pk, 
 }
 
 template <typename IO>
-vector<BLS12381Element> LVT<IO>::batch_thdcp(vector<Ciphertext>& c, vector<Plaintext>& u_tmp, ELGL<IO>* elgl, const ELGL_PK& global_pk, const std::vector<ELGL_PK>& user_pks, MPIOChannel<IO>* io, ThreadPool* pool, int party, int num_party, std::map<std::string, Fr>& P_to_m) {
+vector<BLS12381Element>
+LVT<IO>::batch_thdcp(
+    vector<Ciphertext>& c,
+    vector<Plaintext>& u_tmp,
+    ELGL<IO>* elgl,
+    const ELGL_PK& global_pk,
+    const std::vector<ELGL_PK>& user_pks,
+    MPIOChannel<IO>* io,
+    ThreadPool* pool,
+    int party,
+    int num_party,
+    std::map<std::string, Fr>& P_to_m)
+{
+    const size_t n = c.size();
+    const size_t T = pool->size();
+    const size_t chunk = (n + T - 1) / T;
+
     Plaintext sk(elgl->kp.get_sk().get_sk());
-    vector<BLS12381Element> ask(c.size());
-    vector<vector<BLS12381Element>> ask_parts(num_party, vector<BLS12381Element>(c.size()));
-    vector<BLS12381Element> g1(c.size());
-    std::vector<std::future<void>> futures;
-    for (size_t i = 0; i < c.size(); i++) {
-        futures.emplace_back(pool->enqueue([&g1, &c, i, &sk, &ask, &ask_parts, &party]() {
-            g1[i] = c[i].get_c0();
-            ask[i] = g1[i] * sk.get_message();
-            ask_parts[party - 1][i] = ask[i];
-        }));
+
+    vector<BLS12381Element> ask(n);
+    vector<vector<BLS12381Element>> ask_parts(num_party, vector<BLS12381Element>(n));
+    vector<BLS12381Element> g1(n);
+
+    {
+        vector<std::future<void>> futs;
+        futs.reserve(T);
+
+        for (size_t t = 0; t < T; ++t) {
+            size_t l = t * chunk;
+            size_t r = std::min(l + chunk, n);
+            if (l >= r) break;
+
+            futs.emplace_back(pool->enqueue([&, l, r]() {
+                for (size_t i = l; i < r; ++i) {
+                    g1[i] = c[i].get_c0();
+                    ask[i] = g1[i] * sk.get_message();
+                    ask_parts[party - 1][i] = ask[i];
+                }
+            }));
+        }
+        for (auto& f : futs) f.get();
     }
-    for (auto& fut : futures) fut.get();
-    futures.clear();
 
     ExpProof exp_proof(global_pk);
     ExpProver exp_prover(exp_proof);
     ExpVerifier exp_verifier(exp_proof);
 
     std::stringstream sendss;
-    BLS12381Element pk_tmp = user_pks[party-1].get_pk();
+    BLS12381Element pk_tmp = user_pks[party - 1].get_pk();
     exp_prover.NIZKPoK_(exp_proof, sendss, pk_tmp, g1, ask, sk, pool);
-    for (size_t i = 0; i < c.size(); i++) u_tmp[i].pack(sendss);
+
+    for (size_t i = 0; i < n; ++i)
+        u_tmp[i].pack(sendss);
 
     elgl->serialize_sendall_(sendss);
-    std::vector<std::future<void>> verify_futures;
+
+    vector<std::future<void>> verify_futures;
     vector<std::stringstream> recvss(num_party);
-    vector<vector<Plaintext>> u_others(num_party, vector<Plaintext>(c.size()));
+    vector<vector<Plaintext>> u_others(num_party, vector<Plaintext>(n));
+
     for (int i = 1; i <= num_party; ++i) {
-        if (i != party) {
-            verify_futures.push_back(pool->enqueue([i, &g1, &user_pks, pool, elgl, &exp_verifier, &c, &recvss, &u_others, &ask_parts]() {
-                elgl->deserialize_recv_(recvss[i-1], i);
+        if (i == party) continue;
+
+        verify_futures.emplace_back(
+            pool->enqueue([&, i]() {
+                elgl->deserialize_recv_(recvss[i - 1], i);
                 BLS12381Element y1_other = user_pks[i - 1].get_pk();
-                exp_verifier.NIZKPoK_(y1_other, g1, ask_parts[i-1], recvss[i-1], pool);
-                for (size_t t = 0; t < c.size(); t++) u_others[i-1][t].unpack(recvss[i-1]);
+                exp_verifier.NIZKPoK_(
+                    y1_other, g1, ask_parts[i - 1], recvss[i - 1], pool);
+
+                for (size_t t = 0; t < n; ++t)
+                    u_others[i - 1][t].unpack(recvss[i - 1]);
             }));
-        }
     }
-    for (auto& fut : verify_futures) fut.get();
-    verify_futures.clear();
 
+    for (auto& f : verify_futures) f.get();
 
-    std::vector<std::future<void>> fu;
-    for (size_t i = 0; i < c.size(); i++) {
-            fu.push_back(pool->enqueue([i, &u_others, &num_party, &u_tmp]() {
-                for (int p = 0; p < num_party; p++) {
-                    u_tmp[i] += u_others[p][i];
+    {
+        vector<std::future<void>> futs;
+        futs.reserve(T);
+
+        for (size_t t = 0; t < T; ++t) {
+            size_t l = t * chunk;
+            size_t r = std::min(l + chunk, n);
+            if (l >= r) break;
+
+            futs.emplace_back(pool->enqueue([&, l, r]() {
+                for (size_t i = l; i < r; ++i) {
+                    for (int p = 0; p < num_party; ++p)
+                        u_tmp[i] += u_others[p][i];
                 }
             }));
+        }
+        for (auto& f : futs) f.get();
     }
-    for (auto& fut : fu) fut.get();
-    fu.clear();
 
-    vector<BLS12381Element> pi_ask(c.size());
-    std::vector<std::future<void>> comp_futures;
-     for (size_t i = 0; i < c.size(); i++) {
-        comp_futures.emplace_back(pool->enqueue([&c, i, &pi_ask, &ask_parts, &num_party]() {
-            pi_ask[i] = c[i].get_c1();
-            for (int j = 0; j < num_party; j++) {
-                pi_ask[i] -= ask_parts[j][i];
-            }
-        }));
+    vector<BLS12381Element> pi_ask(n);
+    {
+        vector<std::future<void>> futs;
+        futs.reserve(T);
+
+        for (size_t t = 0; t < T; ++t) {
+            size_t l = t * chunk;
+            size_t r = std::min(l + chunk, n);
+            if (l >= r) break;
+
+            futs.emplace_back(pool->enqueue([&, l, r]() {
+                for (size_t i = l; i < r; ++i) {
+                    pi_ask[i] = c[i].get_c1();
+                    for (int j = 0; j < num_party; ++j)
+                        pi_ask[i] -= ask_parts[j][i];
+                }
+            }));
+        }
+        for (auto& f : futs) f.get();
     }
-    for (auto& fut : comp_futures) fut.get();
-    comp_futures.clear();
 
     return pi_ask;
 }
+
 
 template <typename IO>
 tuple<Plaintext, vector<Ciphertext>> LVT<IO>::lookup_online(Plaintext& x_share, vector<Ciphertext>& x_cipher){ 
@@ -1435,56 +1485,92 @@ tuple<Plaintext, vector<Ciphertext>> LVT<IO>::lookup_online_(Plaintext& x_share,
 }
 
 template <typename IO>
-tuple<vector<Plaintext>, vector<vector<Ciphertext>>> LVT<IO>::lookup_online_batch(vector<Plaintext>& x_shares, vector<vector<Ciphertext>>& x_ciphers)
+tuple<vector<Plaintext>, vector<vector<Ciphertext>>>
+LVT<IO>::lookup_online_batch(
+    vector<Plaintext>& x_shares,
+    vector<vector<Ciphertext>>& x_ciphers)
 {
-    size_t x_size = x_shares.size();
+    const size_t x_size = x_shares.size();
     if (x_size == 0) return {};
-    
+
+    const size_t T = pool->size();
+    const size_t chunk = (x_size + T - 1) / T;
+
     vector<Plaintext> out(x_size);
     vector<vector<Ciphertext>> out_ciphers(num_party, vector<Ciphertext>(x_size));
-    vector<std::future<void>> fut;  
-    fut.reserve(x_size);
-    vector<Plaintext>  local_u_share(x_size);
-    vector<Plaintext>  u_total(x_size);
+
+    vector<Plaintext> local_u_share(x_size);
+    vector<Plaintext> u_total(x_size);
     vector<Ciphertext> c_total(x_size);
-    vector<BLS12381Element> local_p1(x_size);
-    Fr sk = elgl->kp.sk.get_sk();
-    for (size_t i = 0; i < x_size; i++) {
-        fut.push_back(pool->enqueue([&, i]() {
-            local_u_share[i]  = x_shares[i]  + rotation;
-            u_total[i] = local_u_share[i];
-            c_total[i] = x_ciphers[0][i] + cr_i[0];
-            for (size_t p = 1; p < num_party; p++) {
-                c_total[i] += x_ciphers[p][i] + cr_i[p];
-            }
-        }));
+
+    {
+        vector<std::future<void>> futs;
+        futs.reserve(T);
+
+        for (size_t t = 0; t < T; ++t) {
+            size_t l = t * chunk;
+            size_t r = std::min(l + chunk, x_size);
+            if (l >= r) break;
+
+            futs.emplace_back(pool->enqueue([&, l, r]() {
+                for (size_t i = l; i < r; ++i) {
+                    local_u_share[i] = x_shares[i] + rotation;
+                    u_total[i] = local_u_share[i];
+
+                    c_total[i] = x_ciphers[0][i] + cr_i[0];
+                    for (size_t p = 1; p < num_party; ++p) {
+                        c_total[i] += x_ciphers[p][i] + cr_i[p];
+                    }
+                }
+            }));
+        }
+        for (auto& f : futs) f.get();
     }
-    for (auto &f : fut) f.get();
-    fut.clear();
-    vector<BLS12381Element> U = batch_thdcp(c_total, u_total, elgl, global_pk, user_pk, elgl->io, pool, party, num_party, P_to_m);
+
+    vector<BLS12381Element> U =
+        batch_thdcp(c_total, u_total, elgl, global_pk,
+                    user_pk, elgl->io, pool,
+                    party, num_party, P_to_m);
 
     mcl::Vint su_mod;
     su_mod.setStr(to_string(su));
-    for (size_t i = 0; i < c_total.size(); i++) {
-        fut.push_back(pool->enqueue([&, i]() {
-            BLS12381Element UU = BLS12381Element(u_total[i].get_message());
-            if (U[i] != UU) {
-                std::cerr << "[Error] lookup_online_batch verify fail at i=" << i << " party=" << party << "\n";
-                exit(1);
-            }
-            mcl::Vint v = u_total[i].get_message().getMpz();
-            v %= su_mod;
-            u_total[i].assign(v.getStr());
-            size_t idx = static_cast<size_t>(v.getLow32bit());
-            out[i] = lut_share[idx];
-            for (size_t p = 0; p < num_party; p++)
-                out_ciphers[p][i] = Ciphertext(user_pk[p].get_pk(), cip_lut[p][idx]);
-        }));
+
+    {
+        vector<std::future<void>> futs;
+        futs.reserve(T);
+
+        for (size_t t = 0; t < T; ++t) {
+            size_t l = t * chunk;
+            size_t r = std::min(l + chunk, x_size);
+            if (l >= r) break;
+
+            futs.emplace_back(pool->enqueue([&, l, r]() {
+                for (size_t i = l; i < r; ++i) {
+                    BLS12381Element UU(u_total[i].get_message());
+                    if (U[i] != UU) {
+                        std::cerr << "[Error] lookup_online_batch verify fail at i="
+                                  << i << " party=" << party << "\n";
+                        std::exit(1);
+                    }
+
+                    mcl::Vint v = u_total[i].get_message().getMpz();
+                    v %= su_mod;
+                    u_total[i].assign(v.getStr());
+
+                    size_t idx = static_cast<size_t>(v.getLow32bit());
+                    out[i] = lut_share[idx];
+                    for (size_t p = 0; p < num_party; ++p)
+                        out_ciphers[p][i] =
+                            Ciphertext(user_pk[p].get_pk(), cip_lut[p][idx]);
+                }
+            }));
+        }
+        for (auto& f : futs) f.get();
     }
-    for (auto &f : fut) f.get();
-    fut.clear();
+
     return { out, out_ciphers };
 }
+
 
 template <typename IO>
 tuple<vector<Plaintext>, vector<vector<Ciphertext>>> LVT<IO>::lookup_online_batch(vector<Plaintext>& x_shares, vector<Ciphertext>& x_cipher)

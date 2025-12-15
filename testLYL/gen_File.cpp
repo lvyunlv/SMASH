@@ -4,8 +4,8 @@
 #include "emp-aby/lvt.h"
 #include "libelgl/elgl/Plaintext.h"
 using namespace std;
-const size_t message_size = 1ULL << 22;
 std::mt19937_64 rng;
+const static int threads = 32;
 int main(int argc, char** argv) {
     // if (argc < 2) {
     //     std::cout << "please input a number" << std::endl;
@@ -14,10 +14,21 @@ int main(int argc, char** argv) {
     // int num = std::stoi(argv[1]);
     BLS12381Element::init();
     vector<int64_t> table;
-    table.resize(1UL<<25);
+    table.resize(1ULL<<28);
     Plaintext p;
-    for (size_t i = 0; i < table.size(); i++){
-        table[i] = i;
+    ThreadPool pool(threads);
+    
+    size_t n = table.size();
+    size_t chunk = (n + threads - 1) / threads;
+
+    for (int t = 0; t < threads; ++t) {
+        size_t start = t * chunk;
+        size_t end = std::min(start + chunk, n);
+        pool.enqueue([&, start, end]() {
+            for (size_t i = start; i < end; ++i) {
+                table[i] = i;
+            }
+        });
     }
     serializeTable(table, "table_init.txt", table.size());
 

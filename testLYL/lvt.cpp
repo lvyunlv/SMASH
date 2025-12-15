@@ -61,7 +61,7 @@ int main(int argc, char** argv) {
     ThreadPool pool(threads);
     MultiIO* io = new MultiIO(party, num_party, net_config);
     ELGL<MultiIOBase>* elgl = new ELGL<MultiIOBase>(num_party, io, &pool, party);
-    std::string tablefile = "init"; int ran = 8; Fr alpha_fr = alpha_init(ran);
+    std::string tablefile = "init"; int ran = 12; Fr alpha_fr = alpha_init(ran);
     emp::LVT<MultiIOBase>* lvt = new LVT<MultiIOBase>(num_party, party, 
     io, &pool, elgl, tablefile, alpha_fr, ran, ran);
     cout << "Number of parties: " << num_party << endl;

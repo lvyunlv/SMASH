@@ -1,0 +1,22 @@
+[INFO] No valid IP configuration provided. Auto-generating localhost IP list.
+[INFO] Party 1 -> 127.0.0.1:12244
+[INFO] Party 2 -> 127.0.0.1:12245
+[INFO] Party 3 -> 127.0.0.1:12246
+[INFO] Party 4 -> 127.0.0.1:12247
+[INFO] Party 5 -> 127.0.0.1:12248
+[INFO] Party 6 -> 127.0.0.1:12249
+[INFO] Party 7 -> 127.0.0.1:12250
+[INFO] Party 8 -> 127.0.0.1:12251
+[INFO] Party 9 -> 127.0.0.1:12252
+[INFO] Party 10 -> 127.0.0.1:12253
+[INFO] Party 11 -> 127.0.0.1:12254
+[INFO] Party 12 -> 127.0.0.1:12255
+[INFO] Party 13 -> 127.0.0.1:12256
+[INFO] Party 14 -> 127.0.0.1:12257
+[INFO] Party 15 -> 127.0.0.1:12258
+[INFO] Party 16 -> 127.0.0.1:12259
+Number of parties: 16
+Key Generation Done.
+Share Generation Done.
+Input size: 10000
+Online time: 9.95789 s, comm: 22.8883 MB

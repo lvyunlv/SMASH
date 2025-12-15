@@ -58,7 +58,7 @@ void deserialize_P_to_m(std::map<std::string, Fr>& P_to_m, const char* filename)
 }
 
 void build_safe_P_to_m(std::map<std::string, Fr>& P_to_m, int max_exponent) {
-    if (max_exponent <= 1<<8) {
+    if (max_exponent <= 1UL << 24) {
         for (size_t i = 0; i <= max_exponent; ++i) {
             BLS12381Element g_i(i);
             P_to_m[g_i.getPoint().getStr()] = Fr(to_string(i));
@@ -66,7 +66,7 @@ void build_safe_P_to_m(std::map<std::string, Fr>& P_to_m, int max_exponent) {
         return;
     }
     const char* filename = "P_to_m_table.bin";
-    for (size_t i = 0; i <= 1UL << 16; ++i) {
+    for (size_t i = 0; i <= 1UL << 24; ++i) {
         BLS12381Element g_i(i);
         g_i.getPoint().normalize(); 
         P_to_m[g_i.getPoint().getStr()] = Fr(i);

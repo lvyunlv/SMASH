@@ -27,7 +27,7 @@
     namespace fs = std::experimental::filesystem;
 #endif
 
-const int thread_num = 8;
+const int thread_num = 32;
 // #include "cmath"
 // #include <poll.h>
 
@@ -1195,82 +1195,115 @@ Plaintext LVT<IO>::lookup_online(Plaintext& x_share){
 }
 
 template <typename IO>
-vector<Plaintext> LVT<IO>::lookup_online_batch(vector<Plaintext>& x_share){
-    size_t x_size = x_share.size();
+vector<Plaintext>
+LVT<IO>::lookup_online_batch(vector<Plaintext>& x_share)
+{
+    const size_t x_size = x_share.size();
     vector<Plaintext> out(x_size);
     vector<Plaintext> uu(x_size);
     if (x_size == 0) return out;
-    size_t tnum = std::max<size_t>(1, thread_num);
-    size_t block_size = (x_size + tnum - 1) / tnum;
-    if (block_size == 0) block_size = 1;
+
+    const size_t T = pool->size();
+    const size_t chunk = (x_size + T - 1) / T;
+
     {
         vector<future<void>> futs;
-        for (size_t b = 0; b < x_size; b += block_size) {
-            size_t bstart = b;
-            size_t bend = std::min(x_size, b + block_size);
+        futs.reserve(T);
 
-            futs.push_back(pool->enqueue([this, bstart, bend, &x_share, &uu]() {
-                for (size_t i = bstart; i < bend; ++i)
-                    uu[i] = x_share[i] + this->rotation;
-            }));
+        for (size_t t = 0; t < T; ++t) {
+            size_t l = t * chunk;
+            size_t r = std::min(l + chunk, x_size);
+            if (l >= r) break;
+
+            futs.emplace_back(
+                pool->enqueue([&, l, r]() {
+                    for (size_t i = l; i < r; ++i)
+                        uu[i] = x_share[i] + rotation;
+                })
+            );
         }
-        for (auto &f : futs) f.get();
+        for (auto& f : futs) f.get();
     }
+
     std::stringstream send_ss;
     for (size_t i = 0; i < x_size; ++i)
         uu[i].pack(send_ss);
+
     elgl->serialize_sendall_(send_ss);
-    vector<future<vector<Plaintext>>> recv_futs;
-    recv_futs.reserve(num_party - 1);
+
+    vector<vector<Plaintext>> recv_results(num_party);
+
+    vector<future<void>> recv_futs;
     for (int p = 1; p <= num_party; ++p) {
         if (p == party) continue;
-        recv_futs.push_back(pool->enqueue([this, p, x_size]() -> vector<Plaintext> {
-            std::stringstream recv_ss;
-            elgl->deserialize_recv_(recv_ss, p);
-            vector<Plaintext> tmp(x_size);
-            for (size_t j = 0; j < x_size; ++j)
-                tmp[j].unpack(recv_ss);
-            return tmp;
-        }));
-    }
-    vector<vector<Plaintext>> recv_results;
-    for (auto &f : recv_futs)
-        recv_results.push_back(f.get());
-    for (auto &tmp_vec : recv_results) {
-        vector<future<void>> futs;
-        for (size_t b = 0; b < x_size; b += block_size) {
-            size_t bstart = b;
-            size_t bend = std::min(x_size, b + block_size);
 
-            futs.push_back(pool->enqueue([bstart, bend, &uu, &tmp_vec]() {
-                for (size_t j = bstart; j < bend; ++j)
-                    uu[j] += tmp_vec[j];
-            }));
-        }
-        for (auto &f : futs) f.get();
+        recv_futs.emplace_back(
+            pool->enqueue([&, p]() {
+                std::stringstream recv_ss;
+                elgl->deserialize_recv_(recv_ss, p);
+                auto& tmp = recv_results[p - 1];
+                tmp.resize(x_size);
+                for (size_t i = 0; i < x_size; ++i)
+                    tmp[i].unpack(recv_ss);
+            })
+        );
     }
+    for (auto& f : recv_futs) f.get();
+
     {
-        mcl::Vint tbs; tbs.setStr(to_string(su));
         vector<future<void>> futs;
+        futs.reserve(T);
 
-        for (size_t b = 0; b < x_size; b += block_size) {
-            size_t bstart = b;
-            size_t bend = std::min(x_size, b + block_size);
+        for (size_t t = 0; t < T; ++t) {
+            size_t l = t * chunk;
+            size_t r = std::min(l + chunk, x_size);
+            if (l >= r) break;
 
-            futs.push_back(pool->enqueue([this, bstart, bend, &uu, &out, &tbs]() {
-                for (size_t i = bstart; i < bend; ++i) {
-                    mcl::Vint u_mpz = uu[i].get_message().getMpz();
-                    mcl::gmp::mod(u_mpz, u_mpz, tbs);
-
-                    size_t index = static_cast<size_t>(u_mpz.getLow32bit());
-                    out[i] = this->lut_share[index];
-                }
-            }));
+            futs.emplace_back(
+                pool->enqueue([&, l, r]() {
+                    for (size_t i = l; i < r; ++i) {
+                        for (int p = 0; p < num_party; ++p) {
+                            if (p == party - 1) continue;
+                            uu[i] += recv_results[p][i];
+                        }
+                    }
+                })
+            );
         }
-        for (auto &f : futs) f.get();
+        for (auto& f : futs) f.get();
     }
+
+    mcl::Vint tbs;
+    tbs.setStr(to_string(su));
+
+    {
+        vector<future<void>> futs;
+        futs.reserve(T);
+
+        for (size_t t = 0; t < T; ++t) {
+            size_t l = t * chunk;
+            size_t r = std::min(l + chunk, x_size);
+            if (l >= r) break;
+
+            futs.emplace_back(
+                pool->enqueue([&, l, r]() {
+                    for (size_t i = l; i < r; ++i) {
+                        mcl::Vint u_mpz = uu[i].get_message().getMpz();
+                        mcl::gmp::mod(u_mpz, u_mpz, tbs);
+
+                        size_t index =
+                            static_cast<size_t>(u_mpz.getLow32bit());
+                        out[i] = lut_share[index];
+                    }
+                })
+            );
+        }
+        for (auto& f : futs) f.get();
+    }
+
     return out;
 }
+
 
 template <typename IO>
 LVT<IO>::~LVT(){

@@ -105,6 +105,33 @@ namespace emp {
         if (network_simulator) network_simulator->simulate(bytes);
     }
 
+    inline size_t calc_block_size(size_t su, size_t num_party, size_t threads) {
+        size_t party_factor = std::max<size_t>(1, num_party / 4);
+        size_t blk = su / (threads * party_factor);
+        if (su < blk) {
+            blk = su;
+        }
+        return blk; 
+    }
+
+    #define PARALLEL_FOR_SU(begin, end, BODY)                                  \
+    do {                                                                        \
+        size_t _threads = pool->size();                                         \
+        size_t _block = calc_block_size(su, num_party, _threads);              \
+        std::vector<std::future<void>> _fs;                                    \
+        _fs.reserve(_threads);                                                  \
+        for (size_t _b = (begin); _b < (end); _b += _block) {                  \
+            size_t _bs = _b;                                                    \
+            size_t _be = std::min((end), _b + _block);                          \
+            _fs.emplace_back(pool->enqueue([&, _bs, _be]() {                   \
+                for (size_t i = _bs; i < _be; ++i) {                            \
+                    BODY                                                        \
+                }                                                               \
+            }));                                                                \
+        }                                                                       \
+        for (auto& _f : _fs) _f.get();                                          \
+    } while (0)
+
     template <typename IO>
     class ELGL{
         private:

@@ -18,7 +18,7 @@ TESTS=(
 )
 
 NS=(2 4 8 16 32)
-NETS=("lan" "local")
+NETS=("lan" "local" "wan")
 BASE_PORT=62983
 
 parse_value() {
