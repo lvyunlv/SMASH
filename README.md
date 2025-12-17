@@ -35,10 +35,29 @@ make
 ```
 
 # Running tests
-
-To run the tests across multiple servers you can pass the ip configuration as a txt file with the following format.
-
 ```
-<ip1> <port1>
-<ip2> <port2>
+cd Test_scripts
+```
+```
+bert_nonlinear_malicious.sh
+bert_nonlinear_semi.sh
+```
+```
+online_10k_1server.sh
+online_10k_2server.sh
+```
+```
+qwen_nonlinear_malicious.sh
+qwen_nonlinear_semi.sh
+```
+```
+semi_online_10k_1server.sh
+semi_online_10k_2server.sh
+```
+```
+share_conversion.sh
+```
+```
+total_1server.sh
+total_2server.sh
 ```
