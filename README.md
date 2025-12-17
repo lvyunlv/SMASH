@@ -30,34 +30,36 @@ cd SMASH
 1. Build using cmake.
 
 ```console
-cmake .
-make
+mkdir build && cd build && cmake .. && make -j32
 ```
 
 # Running tests
 ```
-cd Test_scripts
+cd bin
+./test_gen_File 
+```
+All tests are run in SMASH/build/bin. 
+```
+bash ../../Test_scripts/bert_nonlinear_malicious.sh
+bash ../../Test_scripts/bert_nonlinear_semi.sh
 ```
 ```
-bert_nonlinear_malicious.sh
-bert_nonlinear_semi.sh
+bash ../../Test_scripts/online_10k_1server.sh
+bash ../../Test_scripts/online_10k_2server.sh
 ```
 ```
-online_10k_1server.sh
-online_10k_2server.sh
+bash ../../Test_scripts/qwen_nonlinear_malicious.sh
+bash ../../Test_scripts/qwen_nonlinear_semi.sh
 ```
 ```
-qwen_nonlinear_malicious.sh
-qwen_nonlinear_semi.sh
+bash ../../Test_scripts/semi_online_10k_1server.sh
+bash ../../Test_scripts/semi_online_10k_2server.sh
 ```
 ```
-semi_online_10k_1server.sh
-semi_online_10k_2server.sh
+bash ../../Test_scripts/share_conversion.sh
 ```
 ```
-share_conversion.sh
+bash ../../Test_scripts/total_1server.sh
+bash ../../Test_scripts/total_2server.sh
 ```
-```
-total_1server.sh
-total_2server.sh
-```
+All results are saved in SMASH/Results.
