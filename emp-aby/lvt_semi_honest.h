@@ -43,12 +43,11 @@ void deserializeTable(vector<int64_t>& table, const char* filename, size_t table
         exit(1);
     }
 
-    table.resize(table_size);  // 预分配空间
+    table.resize(table_size);
     inFile.read(reinterpret_cast<char*>(table.data()), table_size * sizeof(int64_t));
 
-    // 计算实际读取的元素个数
     size_t elementsRead = inFile.gcount() / sizeof(int64_t);
-    table.resize(elementsRead);  // 调整大小以匹配实际读取的内容
+    table.resize(elementsRead);
 
     inFile.close();
 }
@@ -438,7 +437,6 @@ void LVT<IO>::generate_shares(vector<Plaintext>& lut_share, Plaintext& rotation,
         }
         res.clear();
     
-        // 旋转
         Plaintext beta;
         vector<Plaintext> betak;
         betak.resize(su);

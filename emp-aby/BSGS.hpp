@@ -38,11 +38,9 @@ struct BSGSPrecomputation {
             throw std::runtime_error("Cannot open file for writing");
         }
 
-        // 写入n和N
         outFile.write(reinterpret_cast<const char*>(&n), sizeof(n));
         outFile.write(reinterpret_cast<const char*>(&N), sizeof(N));
 
-        // 写入g和g_inv_n
         std::stringstream ss_g, ss_g_inv_n;
         g.pack(ss_g);
         g_inv_n.pack(ss_g_inv_n);
@@ -56,7 +54,6 @@ struct BSGSPrecomputation {
         outFile.write(reinterpret_cast<const char*>(&g_inv_n_len), sizeof(g_inv_n_len));
         outFile.write(g_inv_n_str.c_str(), g_inv_n_len);
 
-        // 写入baby_table
         size_t table_size = baby_table.size();
         outFile.write(reinterpret_cast<const char*>(&table_size), sizeof(table_size));
         
@@ -77,11 +74,9 @@ struct BSGSPrecomputation {
             throw std::runtime_error("Cannot open file for reading");
         }
 
-        // 读取n和N
         inFile.read(reinterpret_cast<char*>(&n), sizeof(n));
         inFile.read(reinterpret_cast<char*>(&N), sizeof(N));
 
-        // 读取g和g_inv_n
         size_t g_len, g_inv_n_len;
         inFile.read(reinterpret_cast<char*>(&g_len), sizeof(g_len));
         std::string g_str(g_len, '\0');
@@ -95,7 +90,6 @@ struct BSGSPrecomputation {
         std::stringstream ss_g_inv_n(g_inv_n_str);
         g_inv_n.unpack(ss_g_inv_n);
 
-        // 读取baby_table
         size_t table_size;
         inFile.read(reinterpret_cast<char*>(&table_size), sizeof(table_size));
         baby_table.clear();
@@ -122,16 +116,14 @@ void BSGSPrecomputation::precompute(const BLS12381Element& g_in, uint64_t N_in, 
     N = N_in;
     n = static_cast<uint64_t>(std::ceil(std::sqrt(N)));
 
-    // 预计算baby_table
     baby_table.clear();
     baby_table.reserve(n);
 
-    // g^{-n}
     Fr n_fr; n_fr.setStr(std::to_string(n));
     BLS12381Element g_n = g * n_fr;
     g_inv_n = g_n.negate();
 
-    BLS12381Element cur; // 单位元
+    BLS12381Element cur;
     for (uint64_t j = 0; j < n; ++j) {
         cur.point.normalize();
         baby_table[cur] = j;
@@ -184,7 +176,6 @@ int64_t BSGSPrecomputation::solve_parallel_with_pool(BLS12381Element& y, ThreadP
         try {
             fut.get();
         } catch (...) {
-            // 处理异常（比如超界异常），这里可以根据需要改
         }
     }
 

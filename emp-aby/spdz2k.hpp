@@ -11,8 +11,7 @@
 #include <condition_variable>
 #include <map>
 
-// SPDZ2k整数域，k=64
-const uint64_t spdz2k_field_size = (1ULL << 63); // 2^63-1，示例用素数
+const uint64_t spdz2k_field_size = (1ULL << 63); 
 
 namespace emp {
 
@@ -267,67 +266,45 @@ public:
         return LabeledShare(0, 0, party, &spdz2k_field_size);
     }
 
-    // 取负操作
     LabeledShare neg(const LabeledShare& x) {
         uint64_t fs = spdz2k_field_size;
-        // 在模域中，-x = (fs - x) % fs
         uint64_t neg_value = (fs - x.value) % fs;
         uint64_t neg_mac = (fs - x.mac) % fs;
         return LabeledShare(neg_value, neg_mac, party, &spdz2k_field_size);
     }
 
-    // 减法操作
     LabeledShare sub(const LabeledShare& x, const LabeledShare& y) {
         // x - y = x + (-y)
         return add(x, neg(y));
     }
 
-    // 截断函数：在模 2^63-1 域上处理定点数截断
     LabeledShare truncate_share(const LabeledShare& x, int f) {
         uint64_t fs = spdz2k_field_size;
         
-        // 直接进行截断，不使用随机掩码
         uint64_t value, mac;
         
         if (party == 1) {
-            // 对于 party 1，使用特殊处理
             value = -((-x.value) >> f);
             mac = -((-x.mac) >> f);
         } else {
-            // 对于其他方，直接右移
             value = x.value >> f;
             mac = x.mac >> f;
         }
         
-        // 确保结果在域内
         value = (value + fs) % fs;
         mac = (mac + fs) % fs;
         
-        // 验证 MAC
         assert(check_mac(value, mac));
         
         return LabeledShare(value, mac, party, &spdz2k_field_size);
     }
 
-    // 带截断的乘法：在模 2^63-1 域上处理定点数乘法
     LabeledShare multiply_with_trunc(const LabeledShare& x, const LabeledShare& y, int f) {
-        // 1. 执行标准 Beaver Triple 乘法
         LabeledShare prod = multiply(x, y);
         
-        // // 2. 打印乘法结果
-        // if (party == 1) {
-        //     std::cout << "Before truncation: " << prod.value << " " 
-        //              << FixedPointConverter::decode(prod.value % FixedPointConverter::FIELD_SIZE) << std::endl;
-        // }
-        
-        // 3. 执行截断
+
         LabeledShare result = truncate_share(prod, f);
-        
-        // // 4. 打印截断结果
-        // if (party == 1) {
-        //     std::cout << "After truncation: " << result.value << " " 
-        //              << FixedPointConverter::decode(result.value % FixedPointConverter::FIELD_SIZE) << std::endl;
-        // 
+
         
         return result;
     }
@@ -351,7 +328,6 @@ public:
         return static_cast<uint64_t>(t);
     }
 
-    // 向量加法
     std::vector<LabeledShare> vector_add(const std::vector<LabeledShare>& a, const std::vector<LabeledShare>& b) {
         assert(a.size() == b.size());
         std::vector<LabeledShare> result(a.size());
@@ -361,7 +337,6 @@ public:
         return result;
     }
 
-    // 矩阵乘法
     std::vector<LabeledShare> matrix_multiply(const std::vector<LabeledShare>& a, const std::vector<LabeledShare>& b, size_t m, size_t k, size_t n, int f) {
         assert(a.size() == m * k);
         assert(b.size() == k * n);
@@ -382,7 +357,6 @@ public:
         return result;
     }
 
-    // 张量减法
     std::vector<LabeledShare> tensor_sub(const std::vector<LabeledShare>& a, const std::vector<LabeledShare>& b) {
         assert(a.size() == b.size());
         std::vector<LabeledShare> result(a.size());
@@ -392,7 +366,6 @@ public:
         return result;
     }
 
-    // 逐元素乘法
     std::vector<LabeledShare> elementwise_multiply(const std::vector<LabeledShare>& a, const std::vector<LabeledShare>& b, int f) {
         assert(a.size() == b.size());
         std::vector<LabeledShare> result(a.size());
