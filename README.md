@@ -5,8 +5,6 @@
 
 ### Build this project
 
-1. Clone the repository.
-
 ```console
 git clone https://github.com/Rhyme595L/SMASH.git
 cd SMASH
@@ -27,38 +25,38 @@ cd SMASH
     ```
 ### Build this project
 
-1. Build using cmake.
-
 ```console
 mkdir build && cd build && cmake .. && make -j32
 ```
 
 # Running tests
-```
+```console
 cd bin
 ./test_gen_File 
 ```
+
 All tests are run in SMASH/build/bin. 
-```
+
+```console
 bash ../../Test_scripts/bert_nonlinear_malicious.sh
 bash ../../Test_scripts/bert_nonlinear_semi.sh
 ```
-```
+```console
 bash ../../Test_scripts/online_10k_1server.sh
 bash ../../Test_scripts/online_10k_2server.sh
 ```
-```
+```console
 bash ../../Test_scripts/qwen_nonlinear_malicious.sh
 bash ../../Test_scripts/qwen_nonlinear_semi.sh
 ```
-```
+```console
 bash ../../Test_scripts/semi_online_10k_1server.sh
 bash ../../Test_scripts/semi_online_10k_2server.sh
 ```
-```
+```console
 bash ../../Test_scripts/share_conversion.sh
 ```
-```
+```console
 bash ../../Test_scripts/total_1server.sh
 bash ../../Test_scripts/total_2server.sh
 ```
