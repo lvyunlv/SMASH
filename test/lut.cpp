@@ -32,7 +32,6 @@ void test_generate_shares(HE<IO>* he, LUT<IO>* lut, MPIOChannel<IO>* io, int n =
             xorBools_arr(rotation, tmp_rot, rotation, n);
         }
         for (int i = 0; i < n; ++i) {
-            // std::cout << rotation[i] << " " << lut_share[2 * i] << " " << lut_share[2 * i + 1] << "\n";
             if (table[0] != lut_share[2 * i + rotation[i] * 1])
                 error("Failed lut share generation!");
             if (table[1] != lut_share[2 * i + (!rotation[i]) * 1])
@@ -75,7 +74,6 @@ void test_lookup(MPIOChannel<IO>* io, LUT<IO>* lut, HE<IO>* he, int64_t t[2], in
                 error("Lookup failed!");
             }
         }
-        // std::cout << "Lookup test passed " << n << std::endl;
     }
     else {
         io->send_bool(ALICE, in, n);

@@ -110,7 +110,6 @@ int main(){
     }
     std::cout << "finish dk ek gen" << std::endl;
     
-    // 增加时间测试prove时长
     std::cout << "prove start" << std::endl;
     auto start = std::chrono::high_resolution_clock::now();
     RotationProver prover(proof);

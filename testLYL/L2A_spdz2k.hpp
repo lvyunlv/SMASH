@@ -192,4 +192,4 @@ inline SPDZ2k<MultiIOBase>::LabeledShare L2A_for_B2A(
     throw std::runtime_error("L2A_for_B2A_spdz2k check failed: decrypted value != share sum");
 }
 
-} // namespace L2A_spdz2k
+}

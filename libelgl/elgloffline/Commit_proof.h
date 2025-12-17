@@ -16,7 +16,6 @@ class CommProof{
 
     Plaintext challenge;
 
-    // protected:
     CommProof(const ELGL_PK& pk, int n_proofs = 1) : pk(&pk), n_proofs(n_proofs) {};
 
     virtual ~CommProof() {}
@@ -24,7 +23,6 @@ class CommProof{
     public:
 
     void set_challenge(std::stringstream& ciphertexts);
-    // void set_challenge(RNG& G);
 };
 
 #endif

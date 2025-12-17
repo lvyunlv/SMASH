@@ -108,7 +108,6 @@ size_t ExpProver::NIZKPoK_(ExpProof& P, std::stringstream& sendss,
     return report_size();
 }
 
-// Online 
 size_t ExpProver::NIZKPoK(ExpProof& P, std::stringstream& ciphertexts, std::stringstream&  cleartexts,
     const BLS12381Element& g1,
     const BLS12381Element& y1,

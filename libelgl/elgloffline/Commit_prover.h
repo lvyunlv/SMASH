@@ -16,9 +16,6 @@ class CommitProver{
 
     size_t report_size();
 
-    // void report_size(MemoryUsage& res);
-
-    // void report_size(ReportType type, MemoryUsage& res);
 };
 
 #endif

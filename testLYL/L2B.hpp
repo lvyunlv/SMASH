@@ -5,7 +5,6 @@
 #include "emp-aby/elgl_interface.hpp"
 #include "emp-aby/tiny.hpp"
 #include "emp-aby/mp-circuit.hpp"
-// #include "emp-aby/simd_interface/arithmetic-circ.h"
 #include "B2L.hpp"
 #include <vector>
 #include <mcl/vint.hpp>
@@ -78,4 +77,4 @@ inline std::vector<TinyMAC<MultiIOBase>::LabeledShare> L2B(ELGL<MultiIOBase>* el
     }
     return x_bool;
 }
-} // namespace L2B
+}

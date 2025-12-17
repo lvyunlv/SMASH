@@ -4,20 +4,15 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(NAME "emp-aby")
 
-# Debug
 set(CMAKE_BUILD_TYPE Release)
-# add_compile_options(-g -O0)
 set(CMAKE_OSX_SYSROOT /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk)
 
-# 设置 EMP_TOOL_DIR 为相对路径
 set(EMP_TOOL_DIR ${CMAKE_SOURCE_DIR}/emp-tool)
 include_directories(${EMP_TOOL_DIR})
 
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
-    # On macOS
     include_directories(/opt/homebrew/opt/openssl/include)
 else()
-    # On Linux
     include_directories(${CMAKE_SOURCE_DIR}/external/openssl/include)
 endif()
 
@@ -35,18 +30,14 @@ if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DLIBS_USE_LIBUV -DLIBS_USE_OPENSSL")
 endif()
 
-# 设置 emp-tool 的相对路径
 set(CMAKE_FOLDER ${CMAKE_SOURCE_DIR}/emp-tool)
 include(${CMAKE_FOLDER}/cmake/emp-base.cmake)
 
-# 查找 OpenFHE
 find_package(OpenFHE REQUIRED)
 
-# 添加子目录
 add_subdirectory(external/mcl)
 add_subdirectory(libelgl)
 
-# 包含目录
 include_directories(external/mcl/include)
 include_directories(libelgl)
 include_directories(${OPENMP_INCLUDES})
@@ -55,16 +46,12 @@ include_directories(${OpenFHE_INCLUDE}/third-party/include)
 include_directories(${OpenFHE_INCLUDE}/core)
 include_directories(${OpenFHE_INCLUDE}/pke)
 
-# 链接目录
 link_directories(${OpenFHE_LIBDIR})
 link_directories(${OPENMP_LIBRARIES})
 
-# Handle filesystem library based on OS
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
-    # On macOS, filesystem is part of the standard library
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
 else()
-    # On Linux, we need to link against stdc++fs
     link_libraries(stdc++fs)
 endif()
 
@@ -76,17 +63,11 @@ else()
     link_libraries(${OpenFHE_SHARED_LIBRARIES})
 endif()
 
-# 查找 emp-ot
 find_package(emp-ot REQUIRED)
 include_directories(${EMP-OT_INCLUDE_DIRS})
 
-# 安装配置
 install(FILES cmake/emp-aby-config.cmake DESTINATION cmake/)
 install(DIRECTORY emp-aby DESTINATION include/)
 
-# 启用测试
 ENABLE_TESTING()
-# ADD_SUBDIRECTORY(test)
-# ADD_SUBDIRECTORY(testLLM)
 ADD_SUBDIRECTORY(testLYL)
-# ADD_SUBDIRECTORY(testProof)

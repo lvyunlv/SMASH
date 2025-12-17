@@ -71,7 +71,6 @@ class Ciphertext{
     };
 
     static bool DeserializFromFile(std::string filepath, std::vector<Ciphertext>& p, size_t n){
-        // load message from file
         std::ifstream file(filepath);
         if (file.is_open()){
             for (size_t i = 0; i < n; i++)
@@ -88,7 +87,6 @@ class Ciphertext{
 
     }
     static bool SerializeToFile(std::string filepath, std::vector<Ciphertext>& p, size_t n){
-        // pack message into file
         std::ofstream file(filepath);
         if (file.is_open()){
             for (size_t i = 0; i < n; i++)

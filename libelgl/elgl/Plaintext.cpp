@@ -1,6 +1,5 @@
 #include "libelgl/elgl/Plaintext.h"
 #include <fstream>
-// #include "gmpxx.h"
 
 Plaintext::Plaintext(){
     message.clear();

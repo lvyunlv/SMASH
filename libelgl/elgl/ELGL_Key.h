@@ -10,8 +10,7 @@ class Ciphertext;
 class ELGL_SK{
     public:
     Fr sk;
-
-    // don't know why it returns 0
+    
     static int size(){return 0;};
 
     Fr get_sk() const{return sk;};

@@ -8,14 +8,3 @@ void ExpProof::set_challenge(const std::stringstream& ciphertexts) {
   challenge.setHashof(tmp, size);
   delete[] tmp;
 }
-
-// void ExpProof::set_challenge(PRNG& G) {
-//     bigint r;
-//     r.generateUniform(G, MCL_MAX_FR_BIT_SIZE);
-//     challenge.assign(r);
-// }
-// void ExpProof::generate_challenge(const Player &P)
-// {
-//   GlobalPRNG G(P);
-//   set_challenge(G);
-// }

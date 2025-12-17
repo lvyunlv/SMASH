@@ -185,4 +185,4 @@ inline MASCOT<MultiIOBase>::LabeledShare L2A_for_B2A(
     throw std::runtime_error("L2A_for_B2A_mascot check failed: decrypted value != share sum");
 }
 
-} // namespace L2A_mascot
+}

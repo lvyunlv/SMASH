@@ -98,7 +98,7 @@ int main() {
     Plaintext alpha; 
 
     mpz_class p = Fr::getOp().mp; 
-    cout << "G1 群的阶 p: " << p.getStr(16) << endl;
+    cout << "G1 p: " << p.getStr(16) << endl;
     
 
     Plaintext g,exp;
@@ -120,7 +120,7 @@ int main() {
 
     Plaintext result;
     result = alpha * alpha_inv;
-    cout << "验证 alpha * alpha_inv: " << result.get_message() << endl;
+    cout << "alpha * alpha_inv: " << result.get_message() << endl;
 
     std::vector<BLS12381Element> input(N);
     for (size_t i = 0; i < N; ++i) {
@@ -134,19 +134,19 @@ int main() {
     FFT_P(input, output, alpha.get_message(), N);
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> duration = end - start;
-    std::cout << "FFT 执行时间: " << duration.count() << " ms" << std::endl;
+    std::cout << "FFT : " << duration.count() << " ms" << std::endl;
 
     start = std::chrono::high_resolution_clock::now();
     FFT(input, output_2, alpha.get_message(), N);
     end = std::chrono::high_resolution_clock::now();
     duration = end - start;
-    std::cout << "FFT 执行时间: " << duration.count() << " ms" << std::endl;
+    std::cout << "FFT : " << duration.count() << " ms" << std::endl;
 
     start = std::chrono::high_resolution_clock::now();
     parallel_FFT(input, alpha.get_message(), N);
     end = std::chrono::high_resolution_clock::now();
     duration = end - start;
-    std::cout << "FFT 执行时间: " << duration.count() << " ms" << std::endl;
+    std::cout << "FFT : " << duration.count() << " ms" << std::endl;
 
 
     for (size_t i = 0; i < N; ++i) {
@@ -159,7 +159,7 @@ int main() {
     for (size_t i = 0; i < N; i++)
     {
         if (output[i] != input[i]){
-            std::cout << i << "错误" << std::endl;
+            std::cout << i << "error" << std::endl;
             return 1;
         }
     }
