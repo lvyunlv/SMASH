@@ -26,7 +26,7 @@ cd SMASH
 ### Build this project
 
 ```console
-mkdir build && cd build && cmake .. && make -j32
+mkdir build && cd build && cmake .. && make -j8
 ```
 
 # Running tests
